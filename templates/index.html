@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSSy2 - AI News Briefing</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --text-secondary: #64748b;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+        }
+        button, .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s;
+            text-decoration: none;
+        }
+        button:hover, .btn:hover {
+            background-color: #1d4ed8;
+        }
+        .btn-secondary {
+            background-color: #e2e8f0;
+            color: var(--text-color);
+        }
+        .btn-secondary:hover {
+            background-color: #cbd5e1;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+        }
+        .sidebar {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        .feed-list {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0;
+        }
+        .feed-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .feed-item:last-child {
+            border-bottom: none;
+        }
+        .feed-name {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .delete-btn {
+            background: none;
+            color: #ef4444;
+            padding: 0.25rem;
+            font-size: 0.8rem;
+        }
+        .delete-btn:hover {
+            background: #fee2e2;
+        }
+        .articles {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .article-card {
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .article-content {
+            padding: 1.5rem;
+        }
+        .article-meta {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 1rem;
+        }
+        .article-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 1rem 0;
+            line-height: 1.4;
+        }
+        .article-title a {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+        .article-title a:hover {
+            color: var(--primary-color);
+        }
+        .article-summary {
+            background-color: #f8fafc;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            border-left: 4px solid var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+        }
+        .article-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        input {
+            padding: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .article-image {
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>RSSy2</h1>
+            <div class="controls">
+                <form action="/refresh" method="post" style="margin:0;">
+                    <button type="submit">🔄 Refresh Now</button>
+                </form>
+            </div>
+        </header>
+
+        <div class="grid">
+            <aside class="sidebar">
+                <h3>Manage Feeds</h3>
+                <form action="/feeds" method="post">
+                    <input type="text" name="name" placeholder="Feed Name" required>
+                    <input type="url" name="url" placeholder="RSS URL" required>
+                    <button type="submit">Add Feed</button>
+                </form>
+
+                <ul class="feed-list">
+                    {% for feed in feeds %}
+                    <li class="feed-item">
+                        <span class="feed-name">{{ feed.name }}</span>
+                        <form action="/feeds/delete" method="post" style="display:inline;">
+                            <input type="hidden" name="feed_id" value="{{ feed.id }}">
+                            <button type="submit" class="delete-btn">✕</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </aside>
+
+            <main class="articles">
+                {% if not articles %}
+                <div class="article-card">
+                    <div class="article-content">
+                        <p style="text-align:center; color:var(--text-secondary);">
+                            No articles found. Add a feed or click Refresh.
+                        </p>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% for article in articles %}
+                <article class="article-card">
+                    {% if article.image_url %}
+                    <img src="{{ article.image_url }}" alt="Article Image" class="article-image" onerror="this.style.display='none'">
+                    {% endif %}
+                    <div class="article-content">
+                        <div class="article-meta">
+                            <span>{{ article.feed_name }}</span>
+                            <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
+                        </div>
+                        <h2 class="article-title">
+                            <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
+                        </h2>
+                        {% if article.summary %}
+                        <div class="article-summary">
+                            <strong>AI Summary:</strong> {{ article.summary }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </main>
+        </div>
+    </div>
+</body>
+</html>

@@ -9,7 +9,8 @@
 - **자동 RSS 가져오기:** 애플리케이션은 설정된 RSS 피드 URL 목록에서 주기적으로(예: 매시간, 구성 가능) 새로운 항목을 읽고 검색합니다.
 - **AI 기반 요약:** 각 새 RSS 피드 항목에 대해 내용은 Gemini AI 모델에 의해 처리되어 핵심 요점을 간결하게 요약합니다.
 - **메인 표시 화면:** 기본 인터페이스(예: 웹 대시보드 또는 풍부한 CLI 출력)는 요약된 보고서를 읽기 쉬운 형식으로 표시하며, 피드 소스 또는 주제별로 분류될 수 있습니다.
-- **보고서 생성:** 요약은 "깔끔한 보고서 형식"으로 제공되며, 가독성과 빠른 정보 검색에 중점을 둡니다. 여기에는 제목, 출처, 원본 링크 및 Gemini가 생성한 요약이 포함될 수 있습니다. 만일 RSS feed에서 가져올 수 있는 유의미한 사진이 있다면 사진도 보고서에 포함이 될 수 있습니다. 보고서는 기본적으로 2시간에 한 번씩 feed를 가져와서 보고서를 생성해서 최신 보고서를 cache해 두고 보여 주며 새로 feed를 읽어 올 경우 이전 보고서는 지우고 새 보고서로 갱신합니다. 별도의 refresh 버튼을 누르면 바로 feed를 읽어들여 보고서 생성을 합니다.
+- **보고서 생성:** 요약은 "깔끔한 보고서 형식"으로 제공되며, 가독성과 빠른 정보 검색에 중점을 둡니다. 여기에는 제목, 출처, 원본 링크 및 Gemini가 생성한 요약이 포함될 수 있습니다. 만일 RSS feed에서 가져올 수 있는 유의미한 사진이 있다면 사진도 보고서에 포함이 될 수 있습니다.
+- **데이터 갱신 및 보존:** 보고서는 기본적으로 2시간에 한 번씩 feed를 가져와서 데이터베이스에 저장합니다. 사용자에게는 최근 24시간(또는 설정된 기간)의 요약만 필터링하여 보여줍니다. 오래된 데이터는 별도의 정리 작업(Cleanup Job)을 통해 주기적으로 삭제하여 데이터베이스 크기를 관리합니다. 별도의 refresh 버튼을 누르면 즉시 feed를 읽어들여 추가합니다.
 
 ### 2.2 설정 화면
 - **RSS 피드 관리:** 전용 설정 인터페이스를 통해 사용자는 다음을 수행할 수 있습니다:
@@ -18,14 +19,14 @@
     - RSS 피드 URL 삭제.
     - 개별 피드 활성화/비활성화.
 - **스케줄링 옵션:** RSS 피드 가져오기 빈도를 설정하기 위한 기본 제어 기능.
-- **Gemini API 키 관리:** Gemini API 키의 보안 저장 및 관리.
+- **Gemini API 키 관리:** `.env` 파일을 사용하여 Gemini API 키를 안전하게 저장하고 관리합니다. 소스 코드에 키가 노출되지 않도록 합니다.
 
 ## 3. 기술 스택
 
 - **백엔드 언어:** Python 3.x
 - **AI 통합:** Google Gemini API (공식 또는 커뮤니티 Python 클라이언트 라이브러리 사용).
-- **웹 프레임워크 (UI에 적용 가능한 경우):** 메인 디스플레이 및 구성에 웹 기반 대시보드를 선택한 경우 경량 웹 서비스를 위한 Flask 또는 FastAPI.
-- **데이터 저장:** 복잡도를 낮추기 위해 별도의 데이터베이스 대신, JSON 파일 또는 간단한 파일 시스템 기반의 저장을 사용합니다. (예: `feeds.json`, `articles.json`)
+- **웹 프레임워크 (UI에 적용 가능한 경우):** 비동기 처리와 성능을 위해 **FastAPI**를 사용합니다.
+- **데이터 저장:** 동시성 문제 해결과 안정적인 데이터 관리를 위해 **SQLite**를 사용합니다. (Python 내장 라이브러리 `sqlite3` 활용)
 - **스케줄러:** 주기적인 작업을 위해 `APScheduler` 또는 애플리케이션에서 관리하는 간단한 `cron` 작업.
 - **배포 환경:** 가정용 Linux 서버 (예: Raspberry Pi, NAS 또는 Linux를 실행하는 구형 데스크톱).
 
@@ -35,8 +36,11 @@
 
 - **스케줄러 모듈:** 정의된 간격으로 피드 가져오기 프로세스를 트리거하는 역할을 합니다.
 - **RSS 가져오기 모듈:** 구성된 RSS URL에서 XML/JSON 데이터를 검색하고, 이를 파싱하여 관련 기사 정보(제목, 링크, 내용/설명)를 추출합니다.
-- **Gemini 요약기 모듈:** Gemini API와 상호 작용하여 기사 내용을 전송하고 요약을 수신합니다. 재시도 메커니즘 및 오류 처리를 포함합니다.
-- **데이터 저장 모듈:** 피드, 기사 및 요약을 JSON 파일 또는 기타 파일 기반 형식으로 저장하고 관리하는 역할을 합니다.
+- **Gemini 요약기 모듈:** Gemini API와 상호 작용하여 기사 내용을 전송하고 요약을 수신합니다. 
+    - **전처리:** HTML 태그 제거 및 본문 텍스트 추출을 통해 토큰 사용량을 최적화합니다.
+    - **속도 제한(Rate Limiting):** API 호출 제한(RPM)을 준수하기 위해 대기 시간(`time.sleep`) 또는 큐(Queue)를 사용합니다.
+    - **오류 처리:** API 호출 실패 시 해당 항목만 건너뛰고 나머지는 진행하는 부분 실패(Partial Failure) 처리를 포함합니다.
+- **데이터 저장 모듈:** 피드, 기사 및 요약을 **SQLite 데이터베이스**에 저장하고 관리합니다. 동시성 제어를 고려하여 트랜잭션을 관리합니다.
 - **표시 모듈:** 요약된 보고서를 표시용으로 렌더링합니다(예: 웹 인터페이스용 HTML 템플릿 또는 CLI용 형식화된 콘솔 출력).
 - **구성 모듈:** RSS 피드 URL 및 스케줄링 기본 설정을 포함한 설정을 관리합니다.
 
@@ -49,7 +53,7 @@
         v                               |
 +--------------------+               +--------------------+
 | 데이터 저장소      | <------------ | 데이터 저장소      |
-| (JSON 파일)        | (기사 쓰기)   | (피드 읽기)        |
+| (SQLite DB)        | (기사 쓰기)   | (피드 읽기)        |
 +--------------------+               +--------------------+
         |
         v
@@ -65,79 +69,44 @@
 +--------------------+
 ```
 
-## 5. 데이터 모델 (JSON 파일 기반)
+## 5. 데이터 모델 (SQLite 스키마)
 
-애플리케이션은 `feeds.json`과 `articles.json` 두 개의 주요 JSON 파일을 사용하여 데이터를 저장합니다.
+애플리케이션은 `rssy2.db` SQLite 데이터베이스를 사용하며, 주요 테이블은 `feeds`와 `articles`입니다.
 
-### 파일: `feeds.json`
-`feeds.json` 파일은 RSS 피드 목록을 저장하며, 각 피드는 고유한 ID를 가진 객체로 표현됩니다.
+### 테이블: `feeds`
+RSS 피드 목록을 저장합니다.
 
-```json
-[
-  {
-    "id": "uuid-1",
-    "url": "https://example.com/rss1",
-    "name": "Example Feed 1",
-    "is_active": true,
-    "last_fetched_at": "2023-10-27T10:00:00Z"
-  },
-  {
-    "id": "uuid-2",
-    "url": "https://example.com/rss2",
-    "name": "Example Feed 2",
-    "is_active": false,
-    "last_fetched_at": "2023-10-27T09:30:00Z"
-  }
-]
+```sql
+CREATE TABLE feeds (
+    id TEXT PRIMARY KEY,          -- UUID
+    url TEXT NOT NULL,            -- RSS 피드 URL
+    name TEXT,                    -- 피드 이름
+    is_active BOOLEAN DEFAULT 1,  -- 활성화 여부
+    last_fetched_at DATETIME      -- 마지막 성공적 가져오기 시간 (ISO 8601)
+);
 ```
 
-**필드 설명:**
-- `id` (STRING): 각 피드의 고유 식별자 (예: UUID).
-- `url` (STRING): RSS 피드의 URL.
-- `name` (STRING, 선택 사항): 피드의 사용자 친화적인 이름.
-- `is_active` (BOOLEAN): 피드가 현재 활성화되어 가져오기 대상인지 여부.
-- `last_fetched_at` (DATETIME, ISO 8601 형식): 마지막으로 피드를 성공적으로 가져온 시간.
+### 테이블: `articles`
+가져온 기사 및 요약 정보를 저장합니다.
 
-### 파일: `articles.json`
-`articles.json` 파일은 가져온 기사 및 요약 정보를 저장합니다. 각 기사는 고유한 ID를 가지며, 어떤 피드에 속하는지 `feed_id`로 참조합니다. 새로운 피드를 가져올 때마다 이 파일의 내용은 새로 갱신됩니다.
-
-```json
-[
-  {
-    "id": "uuid-article-1",
-    "feed_id": "uuid-1",
-    "title": "Article Title 1",
-    "original_url": "https://example.com/article1",
-    "published_at": "2023-10-27T09:45:00Z",
-    "raw_content": "Full content of the article...",
-    "summary": "Gemini generated summary of article 1.",
-    "summarized_at": "2023-10-27T10:05:00Z",
-    "image_url": "https://pimg.mk.co.kr/news/cms/202512/08/news-p.v1.20251208.99aa5d14ec824fe98567fd52fb2d6cc5_R.jpg"
-  },
-  {
-    "id": "uuid-article-2",
-    "feed_id": "uuid-2",
-    "title": "Article Title 2",
-    "original_url": "https://example.com/article2",
-    "published_at": "2023-10-27T09:15:00Z",
-    "raw_content": "Full content of the article...",
-    "summary": "Gemini generated summary of article 2.",
-    "summarized_at": "2023-10-27T09:50:00Z",
-    "image_url": "https://pimg.mk.co.kr/news/cms/202512/08/news-p.v1.20251208.99aa5d14ec824fe98567fd52fb2d6cc5_R.jpg"
-  }
-]
+```sql
+CREATE TABLE articles (
+    id TEXT PRIMARY KEY,          -- UUID
+    feed_id TEXT,                 -- feeds 테이블의 id 참조 (Foreign Key)
+    title TEXT,                   -- 기사 제목
+    original_url TEXT,            -- 원본 기사 URL
+    published_at DATETIME,        -- 기사 게시 시간 (ISO 8601)
+    raw_content TEXT,             -- 원본 기사 내용 (전처리 전/후 선택적 저장)
+    summary TEXT,                 -- Gemini 생성 요약
+    summarized_at DATETIME,       -- 요약 생성 시간
+    image_url TEXT,               -- 기사 관련 이미지 URL
+    FOREIGN KEY(feed_id) REFERENCES feeds(id)
+);
 ```
 
-**필드 설명:**
-- `id` (STRING): 각 기사의 고유 식별자 (예: UUID).
-- `feed_id` (STRING): 이 기사가 속한 피드의 `id`.
-- `title` (STRING): 기사의 제목.
-- `original_url` (STRING): 원본 기사의 URL.
-- `published_at` (DATETIME, ISO 8601 형식): 기사가 게시된 시간.
-- `raw_content` (STRING, 선택 사항): 원본 기사의 전체 또는 일부 내용.
-- `summary` (STRING): Gemini AI 모델이 생성한 기사 요약.
-- `summarized_at` (DATETIME, ISO 8601 형식): 요약이 생성된 시간.
-- `image_url` (STRING, 선택 사항): Feed 안에 `media` 태그를 통해 이미지가 있는 경우 해당 이미지의 URL.
+**참고:**
+- `id`는 UUID v4를 사용하여 생성합니다.
+- 날짜/시간은 UTC 기준 ISO 8601 문자열로 저장하거나, SQLite의 `DATETIME` 타입을 활용합니다.
 
 ## 6. UI/UX 고려 사항
 
@@ -152,10 +121,10 @@
 ## 7. 개발 로드맵 (고수준)
 
 1. **프로젝트 설정:** Python 프로젝트 초기화, 가상 환경 설정, 기본 종속성 관리.
-2. **데이터 파일 설정:** RSS 피드 및 기사 데이터를 저장하기 위한 JSON 파일 구조 정의 및 초기화.
+2. **데이터베이스 설정:** SQLite 데이터베이스 스키마 설계 및 초기화 스크립트 작성.
 3. **RSS 가져오기:** RSS 피드를 가져오고 파싱하는 기능 구현.
-4. **Gemini 통합:** 요약을 위한 Gemini API 호출 구현.
-5. **데이터 저장 로직:** 가져온 기사 및 요약을 JSON 파일에 저장.
+4. **Gemini 통합:** 요약을 위한 Gemini API 호출 구현 (전처리 및 Rate Limiting 포함).
+5. **데이터 저장 로직:** 가져온 기사 및 요약을 SQLite 데이터베이스에 저장 (트랜잭션 처리).
 6. **메인 디스플레이 (기본):** 요약을 볼 수 있는 기본적인 방법 구현 (CLI 또는 간단한 HTML 페이지).
 7. **구성 (기본):** RSS 피드 관리를 위한 CLI 명령 또는 기본 웹 양식 구현.
 8. **스케줄링:** 주기적인 가져오기를 위한 스케줄러 통합.

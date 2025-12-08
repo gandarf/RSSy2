@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+feedparser
+google-generativeai
+apscheduler
+python-dotenv
+jinja2
+beautifulsoup4
+requests
