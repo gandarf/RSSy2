@@ -12,7 +12,7 @@ if GEMINI_API_KEY:
 
 class GeminiSummarizer:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
         self.last_call_time = 0
         self.min_interval = 2.0  # Minimum 2 seconds between calls (approx 30 RPM)
 
