@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = "AIzaSyDf2CGxxg7_-kYGKFXqOXfl1rDYJxtvU7s"
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 

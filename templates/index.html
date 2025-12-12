@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +13,7 @@
             --text-color: #1e293b;
             --text-secondary: #64748b;
         }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--bg-color);
@@ -20,11 +22,13 @@
             padding: 0;
             line-height: 1.6;
         }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 2rem;
         }
+
         header {
             display: flex;
             justify-content: space-between;
@@ -33,17 +37,21 @@
             padding-bottom: 1rem;
             border-bottom: 1px solid #e2e8f0;
         }
+
         h1 {
             font-size: 1.5rem;
             font-weight: 700;
             color: var(--primary-color);
             margin: 0;
         }
+
         .controls {
             display: flex;
             gap: 1rem;
         }
-        button, .btn {
+
+        button,
+        .btn {
             background-color: var(--primary-color);
             color: white;
             border: none;
@@ -54,33 +62,41 @@
             transition: background-color 0.2s;
             text-decoration: none;
         }
-        button:hover, .btn:hover {
+
+        button:hover,
+        .btn:hover {
             background-color: #1d4ed8;
         }
+
         .btn-secondary {
             background-color: #e2e8f0;
             color: var(--text-color);
         }
+
         .btn-secondary:hover {
             background-color: #cbd5e1;
         }
+
         .grid {
             display: grid;
             grid-template-columns: 300px 1fr;
             gap: 2rem;
         }
+
         .sidebar {
             background: var(--card-bg);
             padding: 1.5rem;
             border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             height: fit-content;
         }
+
         .feed-list {
             list-style: none;
             padding: 0;
             margin: 1rem 0;
         }
+
         .feed-item {
             display: flex;
             justify-content: space-between;
@@ -88,38 +104,51 @@
             padding: 0.5rem 0;
             border-bottom: 1px solid #f1f5f9;
         }
+
         .feed-item:last-child {
             border-bottom: none;
         }
+
         .feed-name {
             font-weight: 500;
             font-size: 0.9rem;
         }
+
         .delete-btn {
             background: none;
             color: #ef4444;
             padding: 0.25rem;
             font-size: 0.8rem;
         }
+
         .delete-btn:hover {
             background: #fee2e2;
         }
+
         .articles {
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
         }
+
         .article-card {
             background: var(--card-bg);
             border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             display: flex;
-            flex-direction: column;
-        }
-        .article-content {
+            flex-direction: row;
             padding: 1.5rem;
+            gap: 1.5rem;
+            align-items: flex-start;
         }
+
+        .article-content {
+            padding: 0;
+            flex: 1;
+            min-width: 0;
+        }
+
         .article-meta {
             font-size: 0.875rem;
             color: var(--text-secondary);
@@ -127,19 +156,23 @@
             display: flex;
             gap: 1rem;
         }
+
         .article-title {
             font-size: 1.25rem;
             font-weight: 600;
             margin: 0 0 1rem 0;
             line-height: 1.4;
         }
+
         .article-title a {
             color: var(--text-color);
             text-decoration: none;
         }
+
         .article-title a:hover {
             color: var(--primary-color);
         }
+
         .article-summary {
             background-color: #f8fafc;
             padding: 1rem;
@@ -148,31 +181,40 @@
             margin-bottom: 1rem;
             font-size: 0.95rem;
         }
+
         .article-image {
-            width: 100%;
-            height: 200px;
+            width: 120px;
+            height: 120px;
             object-fit: cover;
+            border-radius: 0.375rem;
+            flex-shrink: 0;
         }
+
         form {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
         }
+
         input {
             padding: 0.5rem;
             border: 1px solid #cbd5e1;
             border-radius: 0.375rem;
         }
+
         @media (max-width: 768px) {
             .grid {
                 grid-template-columns: 1fr;
             }
+
             .article-image {
-                height: 150px;
+                width: 80px;
+                height: 80px;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -219,9 +261,7 @@
 
                 {% for article in articles %}
                 <article class="article-card">
-                    {% if article.image_url %}
-                    <img src="{{ article.image_url }}" alt="Article Image" class="article-image" onerror="this.style.display='none'">
-                    {% endif %}
+
                     <div class="article-content">
                         <div class="article-meta">
                             <span>{{ article.feed_name }}</span>
@@ -236,10 +276,15 @@
                         </div>
                         {% endif %}
                     </div>
+                    {% if article.image_url %}
+                    <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
+                        onerror="this.style.display='none'">
+                    {% endif %}
                 </article>
                 {% endfor %}
             </main>
         </div>
     </div>
 </body>
+
 </html>
