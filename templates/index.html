@@ -202,6 +202,75 @@
             border-radius: 0.375rem;
         }
 
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-featured {
+            margin-bottom: 3rem;
+        }
+
+        .featured-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .featured-card {
+            border-left: 5px solid var(--primary-color);
+        }
+
+        .badge-top {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .standard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .standard-card {
+            flex-direction: column;
+            padding: 1.25rem;
+        }
+
+        .standard-card .article-title-sm {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0 0 0.5rem 0;
+            line-height: 1.4;
+        }
+
+        .standard-card .article-title-sm a {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+
+        .standard-card .article-title-sm a:hover {
+            color: var(--primary-color);
+        }
+
+        .standard-card .article-snippet {
+            font-size: 0.9rem;
+            color: #4b5563;
+            margin: 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
         @media (max-width: 768px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -210,6 +279,10 @@
             .article-image {
                 width: 80px;
                 height: 80px;
+            }
+
+            .standard-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -249,39 +322,69 @@
             </aside>
 
             <main class="articles">
-                {% if not articles %}
-                <div class="article-card">
-                    <div class="article-content">
-                        <p style="text-align:center; color:var(--text-secondary);">
-                            No articles found. Add a feed or click Refresh.
-                        </p>
+                <!-- Top 10 Featured Section -->
+                {% if top_articles %}
+                <section class="section-featured">
+                    <h2 class="section-title">🌟 Today's Top 10 Briefing</h2>
+                    <div class="featured-grid">
+                        {% for article in top_articles %}
+                        <article class="article-card featured-card">
+                            <div class="article-content">
+                                <div class="article-meta">
+                                    <span class="badge-top">TOP PICK</span>
+                                    <span>{{ article.feed_name }}</span>
+                                    <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
+                                </div>
+                                <h2 class="article-title">
+                                    <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
+                                </h2>
+                                <div class="article-summary">
+                                    <strong>AI Summary:</strong> {{ article.summary }}
+                                </div>
+                            </div>
+                            {% if article.image_url %}
+                            <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
+                                onerror="this.style.display='none'">
+                            {% endif %}
+                        </article>
+                        {% endfor %}
                     </div>
-                </div>
+                </section>
                 {% endif %}
 
-                {% for article in articles %}
-                <article class="article-card">
+                <!-- Standard News Section -->
+                <section class="section-standard">
+                    <h2 class="section-title">📰 Latest News Feed</h2>
 
-                    <div class="article-content">
-                        <div class="article-meta">
-                            <span>{{ article.feed_name }}</span>
-                            <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
+                    {% if not top_articles and not other_articles %}
+                    <div class="article-card">
+                        <div class="article-content">
+                            <p style="text-align:center; color:var(--text-secondary);">
+                                No articles found. Add a feed or click Refresh.
+                            </p>
                         </div>
-                        <h2 class="article-title">
-                            <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
-                        </h2>
-                        {% if article.summary %}
-                        <div class="article-summary">
-                            <strong>AI Summary:</strong> {{ article.summary }}
-                        </div>
-                        {% endif %}
                     </div>
-                    {% if article.image_url %}
-                    <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
-                        onerror="this.style.display='none'">
                     {% endif %}
-                </article>
-                {% endfor %}
+
+                    <div class="standard-grid">
+                        {% for article in other_articles %}
+                        <article class="article-card standard-card">
+                            <div class="article-content">
+                                <div class="article-meta">
+                                    <span>{{ article.feed_name }}</span>
+                                    <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
+                                </div>
+                                <h3 class="article-title-sm">
+                                    <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
+                                </h3>
+                                <p class="article-snippet">
+                                    {{ article.summary[:150] }}...
+                                </p>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
             </main>
         </div>
     </div>

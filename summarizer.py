@@ -4,7 +4,7 @@ import google.generativeai as genai
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("key.env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -13,6 +13,8 @@ if GEMINI_API_KEY:
 
 class GeminiSummarizer:
     def __init__(self):
+        if not GEMINI_API_KEY:
+            print("WARNING: Gemini API Key not found in environment variables. AI features will be disabled.")
         self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
         self.last_call_time = 0
         self.min_interval = 2.0  # Minimum 2 seconds between calls (approx 30 RPM)
@@ -68,7 +70,7 @@ class GeminiSummarizer:
         try:
             length_instruction = "keep it concise."
             if max_length:
-                length_instruction = f"summarize it in under {max_length} characters."
+                length_instruction = f"summarize it up to 4 lines."
 
             prompt = f"""
             Please summarize the following article in Korean. 

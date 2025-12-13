@@ -1,12 +1,12 @@
-import feedparser
 from datetime import datetime
+import calendar
 from time import mktime
 
 def parse_date(entry):
     if hasattr(entry, 'published_parsed'):
-        return datetime.fromtimestamp(mktime(entry.published_parsed)).isoformat()
+        return datetime.utcfromtimestamp(calendar.timegm(entry.published_parsed)).isoformat()
     if hasattr(entry, 'updated_parsed'):
-        return datetime.fromtimestamp(mktime(entry.updated_parsed)).isoformat()
+        return datetime.utcfromtimestamp(calendar.timegm(entry.updated_parsed)).isoformat()
     return datetime.utcnow().isoformat()
 
 def fetch_feed(feed_url):

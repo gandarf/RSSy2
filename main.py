@@ -24,9 +24,14 @@ def on_startup():
 async def read_root(request: Request):
     articles = get_recent_articles(hours=24)
     feeds = get_feeds()
+    
+    top_articles = [a for a in articles if a['is_top_selection']]
+    other_articles = [a for a in articles if not a['is_top_selection']]
+    
     return templates.TemplateResponse("index.html", {
         "request": request, 
-        "articles": articles, 
+        "top_articles": top_articles,
+        "other_articles": other_articles,
         "feeds": feeds
     })
 

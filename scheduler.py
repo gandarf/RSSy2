@@ -42,25 +42,25 @@ def update_feeds_job():
             if len(new_entries) > 10:
                 titles = [entry['title'] for entry in new_entries]
                 top_10_indices = summarizer.select_top_10(titles)
-                logger.info(f"Selected Top 10 indices: {top_10_indices}")
+                if not top_10_indices:
+                     logger.warning("Top 10 selection failed (or returned empty). Falling back to first 10 articles.")
+                     top_10_indices = list(range(10))
+                else:
+                    logger.info(f"Selected Top 10 indices: {top_10_indices}")
             else:
                 top_10_indices = list(range(len(new_entries))) # All are top if <= 10
             
             for i, entry in enumerate(new_entries):
                 summary = ""
+                is_top = False
+                
                 if i in top_10_indices:
                     logger.info(f"Summarizing Top 10 item: {entry['title']}")
                     summary = summarizer.summarize_short(entry['content'])
+                    is_top = True
                 else:
                     logger.info(f"Saving standard item (no AI summary): {entry['title']}")
                     # Use description/content as is, no AI summary
-                    # If content is HTML, we might want to strip it for consistency via summarizer clean_text if needed, 
-                    # but prompt said "show RSS feed content".
-                    # We'll just save the raw content as the summary (or let UI handle it). 
-                    # Actually, the requirement says "show RSS feed content". 
-                    # We can put it in the 'summary' field or just leave 'summary' empty and UI falls back to 'raw_content'.
-                    # But to be explicit for the 'Top 10 list' logic, let's put it in summary if compatible.
-                    # Since summary field is used for 'report', we'll put the text there.
                     summary = entry['content'] # Or description
                     
                 save_article(
@@ -70,7 +70,8 @@ def update_feeds_job():
                     entry['published_at'],
                     entry['content'],
                     entry['image_url'],
-                    summary=summary
+                    summary=summary,
+                    is_top_selection=is_top
                 )
                     
         except Exception as e:

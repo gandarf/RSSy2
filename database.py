@@ -36,6 +36,7 @@ def init_db():
         summary TEXT,
         summarized_at DATETIME,
         image_url TEXT,
+        is_top_selection BOOLEAN DEFAULT 0,
         FOREIGN KEY(feed_id) REFERENCES feeds(id)
     )
     ''')
@@ -85,7 +86,7 @@ def filter_new_urls(urls):
     conn.close()
     return [url for url in urls if url not in existing_urls]
 
-def save_article(feed_id, title, url, published_at, content, image_url=None, summary=None):
+def save_article(feed_id, title, url, published_at, content, image_url=None, summary=None, is_top_selection=False):
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -101,10 +102,10 @@ def save_article(feed_id, title, url, published_at, content, image_url=None, sum
     
     cursor.execute(
         '''
-        INSERT INTO articles (id, feed_id, title, original_url, published_at, raw_content, image_url, summary, summarized_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO articles (id, feed_id, title, original_url, published_at, raw_content, image_url, summary, summarized_at, is_top_selection)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
-        (article_id, feed_id, title, url, published_at, content, image_url, summary, summarized_at)
+        (article_id, feed_id, title, url, published_at, content, image_url, summary, summarized_at, is_top_selection)
     )
     conn.commit()
     conn.close()
