@@ -74,7 +74,18 @@ def delete_feed(feed_id):
     conn.commit()
     conn.close()
 
-def save_article(feed_id, title, url, published_at, content, image_url=None):
+def filter_new_urls(urls):
+    if not urls:
+        return []
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    placeholders = ','.join('?' * len(urls))
+    cursor.execute(f"SELECT original_url FROM articles WHERE original_url IN ({placeholders})", urls)
+    existing_urls = {row['original_url'] for row in cursor.fetchall()}
+    conn.close()
+    return [url for url in urls if url not in existing_urls]
+
+def save_article(feed_id, title, url, published_at, content, image_url=None, summary=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -85,12 +96,15 @@ def save_article(feed_id, title, url, published_at, content, image_url=None):
         return None  # Already exists
         
     article_id = str(uuid.uuid4())
+    # If summary is provided initially (e.g. from batch process)
+    summarized_at = datetime.utcnow().isoformat() if summary else None
+    
     cursor.execute(
         '''
-        INSERT INTO articles (id, feed_id, title, original_url, published_at, raw_content, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO articles (id, feed_id, title, original_url, published_at, raw_content, image_url, summary, summarized_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
-        (article_id, feed_id, title, url, published_at, content, image_url)
+        (article_id, feed_id, title, url, published_at, content, image_url, summary, summarized_at)
     )
     conn.commit()
     conn.close()

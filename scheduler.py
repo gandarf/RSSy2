@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 summarizer = GeminiSummarizer()
 
+from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls
+
 def update_feeds_job():
     logger.info("Starting feed update job...")
     feeds = get_feeds(active_only=True)
@@ -19,23 +21,57 @@ def update_feeds_job():
             logger.info(f"Fetching feed: {feed['name']} ({feed['url']})")
             parsed_feed = fetch_feed(feed['url'])
             
-            for entry in parsed_feed['entries']:
-                # Save article (returns ID if new, None if exists)
-                article_id = save_article(
+            # Identify new articles by checking URLs
+            all_entries = parsed_feed['entries']
+            if not all_entries:
+                continue
+                
+            entry_urls = [entry['link'] for entry in all_entries]
+            new_urls = set(filter_new_urls(entry_urls))
+            
+            new_entries = [entry for entry in all_entries if entry['link'] in new_urls]
+            
+            if not new_entries:
+                logger.info("No new articles found.")
+                continue
+            
+            logger.info(f"Found {len(new_entries)} new articles.")
+            
+            # Select Top 10 from new articles if we have many
+            top_10_indices = []
+            if len(new_entries) > 10:
+                titles = [entry['title'] for entry in new_entries]
+                top_10_indices = summarizer.select_top_10(titles)
+                logger.info(f"Selected Top 10 indices: {top_10_indices}")
+            else:
+                top_10_indices = list(range(len(new_entries))) # All are top if <= 10
+            
+            for i, entry in enumerate(new_entries):
+                summary = ""
+                if i in top_10_indices:
+                    logger.info(f"Summarizing Top 10 item: {entry['title']}")
+                    summary = summarizer.summarize_short(entry['content'])
+                else:
+                    logger.info(f"Saving standard item (no AI summary): {entry['title']}")
+                    # Use description/content as is, no AI summary
+                    # If content is HTML, we might want to strip it for consistency via summarizer clean_text if needed, 
+                    # but prompt said "show RSS feed content".
+                    # We'll just save the raw content as the summary (or let UI handle it). 
+                    # Actually, the requirement says "show RSS feed content". 
+                    # We can put it in the 'summary' field or just leave 'summary' empty and UI falls back to 'raw_content'.
+                    # But to be explicit for the 'Top 10 list' logic, let's put it in summary if compatible.
+                    # Since summary field is used for 'report', we'll put the text there.
+                    summary = entry['content'] # Or description
+                    
+                save_article(
                     feed['id'],
                     entry['title'],
                     entry['link'],
                     entry['published_at'],
                     entry['content'],
-                    entry['image_url']
+                    entry['image_url'],
+                    summary=summary
                 )
-                
-                if article_id:
-                    logger.info(f"New article found: {entry['title']}")
-                    # Generate summary
-                    summary = summarizer.summarize(entry['content'])
-                    update_article_summary(article_id, summary)
-                    logger.info(f"Summarized article: {article_id}")
                     
         except Exception as e:
             logger.error(f"Error updating feed {feed['url']}: {e}")
@@ -45,5 +81,5 @@ def update_feeds_job():
     logger.info("Feed update job completed.")
 
 def start_scheduler():
-    scheduler.add_job(update_feeds_job, 'interval', minutes=60, id='update_feeds')
+    scheduler.add_job(update_feeds_job, 'interval', minutes=120, id='update_feeds')
     scheduler.start()

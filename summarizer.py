@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GEMINI_API_KEY = "AIzaSyDf2CGxxg7_-kYGKFXqOXfl1rDYJxtvU7s"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -22,7 +23,36 @@ class GeminiSummarizer:
         soup = BeautifulSoup(html_content, 'html.parser')
         return soup.get_text(separator=' ', strip=True)[:10000]  # Limit context size
 
-    def summarize(self, content):
+    def select_top_10(self, titles):
+        if not GEMINI_API_KEY:
+            return []
+        
+        # Prepare the list for the prompt
+        titles_text = "\n".join([f"{i}. {t}" for i, t in enumerate(titles)])
+        
+        try:
+            prompt = f"""
+            Select the top 10 most important or interesting articles from the following list.
+            Return ONLY the indices of the selected articles as a comma-separated list (e.g., 0, 2, 5, ...).
+            Do not include any other text.
+            
+            Articles:
+            {titles_text}
+            """
+            response = self.model.generate_content(prompt)
+            self.last_call_time = time.time()
+            
+            # Parse response
+            text = response.text.strip()
+            # Handle potential non-numeric characters roughly
+            indices = [int(x.strip()) for x in text.split(',') if x.strip().isdigit()]
+            return indices[:10] # Enforce max 10
+            
+        except Exception as e:
+            print(f"Error selecting top 10: {e}")
+            return []
+
+    def summarize(self, content, max_length=None):
         if not GEMINI_API_KEY:
             return "Error: Gemini API Key not found."
 
@@ -36,9 +66,13 @@ class GeminiSummarizer:
             time.sleep(self.min_interval - elapsed)
 
         try:
+            length_instruction = "keep it concise."
+            if max_length:
+                length_instruction = f"summarize it in under {max_length} characters."
+
             prompt = f"""
             Please summarize the following article in Korean. 
-            Focus on the main points and keep it concise.
+            Focus on the main points and {length_instruction}
             
             Article:
             {text}
@@ -49,3 +83,6 @@ class GeminiSummarizer:
         except Exception as e:
             print(f"Error summarizing: {e}")
             return f"Error generating summary: {str(e)}"
+            
+    def summarize_short(self, content):
+        return self.summarize(content, max_length=250)
