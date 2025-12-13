@@ -1,3 +1,4 @@
+import feedparser
 from datetime import datetime
 import calendar
 from time import mktime
