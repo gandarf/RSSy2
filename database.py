@@ -146,3 +146,23 @@ def cleanup_old_articles(days=7):
     cursor.execute("DELETE FROM articles WHERE published_at < ?", (cutoff,))
     conn.commit()
     conn.close()
+
+def update_feed_last_fetched(feed_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE feeds SET last_fetched_at = ? WHERE id = ?",
+        (datetime.utcnow().isoformat(), feed_id)
+    )
+    conn.commit()
+    conn.close()
+
+def get_last_updated():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT MAX(last_fetched_at) as last_updated FROM feeds WHERE is_active = 1")
+    result = cursor.fetchone()
+    conn.close()
+    if result and result['last_updated']:
+        return result['last_updated']
+    return None

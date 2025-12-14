@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from database import init_db, add_feed, get_feeds, delete_feed, get_recent_articles
+from database import init_db, add_feed, get_feeds, delete_feed, get_recent_articles, get_last_updated
 from scheduler import start_scheduler, update_feeds_job
 import uvicorn
 import os
@@ -28,11 +28,14 @@ async def read_root(request: Request):
     top_articles = [a for a in articles if a['is_top_selection']]
     other_articles = [a for a in articles if not a['is_top_selection']]
     
+    last_updated = get_last_updated()
+
     return templates.TemplateResponse("index.html", {
         "request": request, 
         "top_articles": top_articles,
         "other_articles": other_articles,
-        "feeds": feeds
+        "feeds": feeds,
+        "last_updated": last_updated
     })
 
 @app.post("/feeds")

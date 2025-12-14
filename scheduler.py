@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 summarizer = GeminiSummarizer()
 
-from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls
+from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched
 
 def update_feeds_job():
     logger.info("Starting feed update job...")
@@ -23,6 +23,10 @@ def update_feeds_job():
             
             # Identify new articles by checking URLs
             all_entries = parsed_feed['entries']
+            
+            # Update last fetched time regardless of new articles
+            update_feed_last_fetched(feed['id'])
+
             if not all_entries:
                 continue
                 
@@ -82,5 +86,5 @@ def update_feeds_job():
     logger.info("Feed update job completed.")
 
 def start_scheduler():
-    scheduler.add_job(update_feeds_job, 'interval', minutes=120, id='update_feeds')
+    scheduler.add_job(update_feeds_job, 'interval', minutes=180, id='update_feeds')
     scheduler.start()

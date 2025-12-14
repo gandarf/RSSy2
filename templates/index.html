@@ -291,7 +291,13 @@
 <body>
     <div class="container">
         <header>
-            <h1>RSSy2</h1>
+            <div>
+                <h1>RSSy2</h1>
+                {% if last_updated %}
+                <small style="color: var(--text-secondary); font-size: 0.9rem;">Last Report: {{
+                    last_updated[:16].replace('T', ' ') }}</small>
+                {% endif %}
+            </div>
             <div class="controls">
                 <form action="/refresh" method="post" style="margin:0;">
                     <button type="submit">🔄 Refresh Now</button>
@@ -299,94 +305,102 @@
             </div>
         </header>
 
-        <div class="grid">
-            <aside class="sidebar">
-                <h3>Manage Feeds</h3>
-                <form action="/feeds" method="post">
-                    <input type="text" name="name" placeholder="Feed Name" required>
-                    <input type="url" name="url" placeholder="RSS URL" required>
-                    <button type="submit">Add Feed</button>
-                </form>
-
-                <ul class="feed-list">
-                    {% for feed in feeds %}
-                    <li class="feed-item">
-                        <span class="feed-name">{{ feed.name }}</span>
-                        <form action="/feeds/delete" method="post" style="display:inline;">
-                            <input type="hidden" name="feed_id" value="{{ feed.id }}">
-                            <button type="submit" class="delete-btn">✕</button>
-                        </form>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </aside>
-
-            <main class="articles">
-                <!-- Top 10 Featured Section -->
-                {% if top_articles %}
-                <section class="section-featured">
-                    <h2 class="section-title">🌟 Today's Top 10 Briefing</h2>
-                    <div class="featured-grid">
-                        {% for article in top_articles %}
-                        <article class="article-card featured-card">
-                            <div class="article-content">
-                                <div class="article-meta">
-                                    <span class="badge-top">TOP PICK</span>
-                                    <span>{{ article.feed_name }}</span>
-                                    <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
-                                </div>
-                                <h2 class="article-title">
-                                    <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
-                                </h2>
-                                <div class="article-summary">
-                                    <strong>AI Summary:</strong> {{ article.summary }}
-                                </div>
+        <main class="articles">
+            <!-- Top 10 Featured Section -->
+            {% if top_articles %}
+            <section class="section-featured">
+                <h2 class="section-title">🌟 Today's Top 10 Briefing</h2>
+                <div class="featured-grid">
+                    {% for article in top_articles %}
+                    <article class="article-card featured-card">
+                        <div class="article-content">
+                            <div class="article-meta">
+                                <span class="badge-top">TOP PICK</span>
+                                <span>{{ article.feed_name }}</span>
+                                <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
                             </div>
-                            {% if article.image_url %}
-                            <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
-                                onerror="this.style.display='none'">
-                            {% endif %}
-                        </article>
-                        {% endfor %}
+                            <h2 class="article-title">
+                                <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
+                            </h2>
+                            <div class="article-summary">
+                                <strong>AI Summary:</strong> {{ article.summary }}
+                            </div>
+                        </div>
+                        {% if article.image_url %}
+                        <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
+                            onerror="this.style.display='none'">
+                        {% endif %}
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Standard News Section -->
+            <section class="section-standard">
+                <h2 class="section-title">📰 Latest News Feed</h2>
+
+                {% if not top_articles and not other_articles %}
+                <div class="article-card">
+                    <div class="article-content">
+                        <p style="text-align:center; color:var(--text-secondary);">
+                            No articles found. Add a feed or click Refresh.
+                        </p>
                     </div>
-                </section>
+                </div>
                 {% endif %}
 
-                <!-- Standard News Section -->
-                <section class="section-standard">
-                    <h2 class="section-title">📰 Latest News Feed</h2>
-
-                    {% if not top_articles and not other_articles %}
-                    <div class="article-card">
+                <div class="standard-grid">
+                    {% for article in other_articles %}
+                    <article class="article-card standard-card">
                         <div class="article-content">
-                            <p style="text-align:center; color:var(--text-secondary);">
-                                No articles found. Add a feed or click Refresh.
+                            <div class="article-meta">
+                                <span>{{ article.feed_name }}</span>
+                                <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
+                            </div>
+                            <h3 class="article-title-sm">
+                                <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
+                            </h3>
+                            <p class="article-snippet">
+                                {{ article.summary[:150] }}...
                             </p>
                         </div>
-                    </div>
-                    {% endif %}
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+        </main>
 
-                    <div class="standard-grid">
-                        {% for article in other_articles %}
-                        <article class="article-card standard-card">
-                            <div class="article-content">
-                                <div class="article-meta">
-                                    <span>{{ article.feed_name }}</span>
-                                    <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
-                                </div>
-                                <h3 class="article-title-sm">
-                                    <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
-                                </h3>
-                                <p class="article-snippet">
-                                    {{ article.summary[:150] }}...
-                                </p>
-                            </div>
-                        </article>
+        <hr style="margin: 3rem 0; border: 0; border-top: 1px solid #e2e8f0;">
+
+        <section class="settings" style="margin-bottom: 3rem;">
+            <details>
+                <summary style="font-size: 1.2rem; font-weight: 600; cursor: pointer; color: var(--text-color);"> Manage
+                    Feeds (Settings) </summary>
+                <div class="settings-content"
+                    style="margin-top: 1rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                    <h3>Add New Feed</h3>
+                    <form action="/feeds" method="post" style="max-width: 400px; margin-bottom: 2rem;">
+                        <input type="text" name="name" placeholder="Feed Name" required>
+                        <input type="url" name="url" placeholder="RSS URL" required>
+                        <button type="submit">Add Feed</button>
+                    </form>
+
+                    <h3>Current Feeds</h3>
+                    <ul class="feed-list">
+                        {% for feed in feeds %}
+                        <li class="feed-item">
+                            <span class="feed-name">{{ feed.name }} ({{ feed.url }})</span>
+                            <form action="/feeds/delete" method="post" style="display:inline;">
+                                <input type="hidden" name="feed_id" value="{{ feed.id }}">
+                                <button type="submit" class="delete-btn">✕</button>
+                            </form>
+                        </li>
                         {% endfor %}
-                    </div>
-                </section>
-            </main>
-        </div>
+                    </ul>
+                </div>
+            </details>
+        </section>
     </div>
 </body>
 

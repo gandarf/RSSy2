@@ -23,7 +23,7 @@ class GeminiSummarizer:
         if not html_content:
             return ""
         soup = BeautifulSoup(html_content, 'html.parser')
-        return soup.get_text(separator=' ', strip=True)[:10000]  # Limit context size
+        return soup.get_text(separator=' ', strip=True)[:4000]  # Limit context size
 
     def select_top_10(self, titles):
         if not GEMINI_API_KEY:
