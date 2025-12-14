@@ -41,6 +41,16 @@ def init_db():
     )
     ''')
     
+
+
+    # Create settings table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -166,3 +176,23 @@ def get_last_updated():
     if result and result['last_updated']:
         return result['last_updated']
     return None
+
+def get_setting(key, default=None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return result['value']
+    return default
+
+def set_setting(key, value):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, str(value))
+    )
+    conn.commit()
+    conn.close()

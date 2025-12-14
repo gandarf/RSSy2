@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 summarizer = GeminiSummarizer()
 
-from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched
+from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched, get_setting
 
 def update_feeds_job():
     logger.info("Starting feed update job...")
@@ -61,6 +61,9 @@ def update_feeds_job():
                 if i in top_10_indices:
                     logger.info(f"Summarizing Top 10 item: {entry['title']}")
                     summary = summarizer.summarize_short(entry['content'])
+                    if not summary:
+                         logger.warning("Summarization failed. Using original content as fallback.")
+                         summary = entry['content']
                     is_top = True
                 else:
                     logger.info(f"Saving standard item (no AI summary): {entry['title']}")
@@ -86,5 +89,28 @@ def update_feeds_job():
     logger.info("Feed update job completed.")
 
 def start_scheduler():
-    scheduler.add_job(update_feeds_job, 'interval', minutes=180, id='update_feeds')
+    interval_minutes = int(get_setting('refresh_interval', 120))
+    auto_refresh = get_setting('auto_refresh', 'true') == 'true'
+
+    if auto_refresh:
+        scheduler.add_job(update_feeds_job, 'interval', minutes=interval_minutes, id='update_feeds')
+        logger.info(f"Scheduler started with interval {interval_minutes} minutes.")
+    else:
+        logger.info("Scheduler started but auto-refresh is disabled.")
+    
     scheduler.start()
+
+def update_job_settings(auto_refresh, interval_minutes):
+    job = scheduler.get_job('update_feeds')
+    
+    if auto_refresh:
+        if job:
+            job.reschedule(trigger='interval', minutes=interval_minutes)
+            logger.info(f"Rescheduled job with interval {interval_minutes} minutes.")
+        else:
+            scheduler.add_job(update_feeds_job, 'interval', minutes=interval_minutes, id='update_feeds')
+            logger.info(f"Added job with interval {interval_minutes} minutes.")
+    else:
+        if job:
+            job.remove()
+            logger.info("Removed auto-refresh job.")

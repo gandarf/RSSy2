@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from database import init_db, add_feed, get_feeds, delete_feed, get_recent_articles, get_last_updated
-from scheduler import start_scheduler, update_feeds_job
+from database import init_db, add_feed, get_feeds, delete_feed, get_recent_articles, get_last_updated, get_setting, set_setting
+from scheduler import start_scheduler, update_feeds_job, update_job_settings
 import uvicorn
 import os
 
@@ -29,13 +29,20 @@ async def read_root(request: Request):
     other_articles = [a for a in articles if not a['is_top_selection']]
     
     last_updated = get_last_updated()
+    
+    # Get Settings
+    auto_refresh = get_setting('auto_refresh', 'true') == 'true'
+    refresh_interval = int(get_setting('refresh_interval', 120))
 
     return templates.TemplateResponse("index.html", {
         "request": request, 
         "top_articles": top_articles,
         "other_articles": other_articles,
         "feeds": feeds,
-        "last_updated": last_updated
+        "feeds": feeds,
+        "last_updated": last_updated,
+        "auto_refresh": auto_refresh,
+        "refresh_interval": refresh_interval
     })
 
 @app.post("/feeds")
@@ -61,6 +68,18 @@ async def refresh_feeds():
     # Note: This runs synchronously and might block. In production, use background tasks.
     # But for this simple app, it's okay or we can use BackgroundTasks
     update_feeds_job()
+    return RedirectResponse(url="/", status_code=303)
+
+@app.post("/settings")
+async def update_settings(auto_refresh: str = Form(None), refresh_interval: int = Form(...)):
+    # Checkbox sends 'on' if checked, else None
+    is_auto_refresh = True if auto_refresh == 'on' else False
+    
+    set_setting('auto_refresh', 'true' if is_auto_refresh else 'false')
+    set_setting('refresh_interval', refresh_interval)
+    
+    update_job_settings(is_auto_refresh, refresh_interval)
+    
     return RedirectResponse(url="/", status_code=303)
 
 if __name__ == "__main__":

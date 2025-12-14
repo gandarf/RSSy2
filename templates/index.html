@@ -267,6 +267,7 @@
             margin: 0;
             display: -webkit-box;
             -webkit-line-clamp: 3;
+            line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -379,7 +380,32 @@
                     Feeds (Settings) </summary>
                 <div class="settings-content"
                     style="margin-top: 1rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                    <h3>Add New Feed</h3>
+                    <h3>General Settings</h3>
+                    <form action="/settings" method="post"
+                        style="max-width: 400px; margin-bottom: 2rem; background: #f8fafc; padding: 1rem; border-radius: 0.5rem;">
+                        <div
+                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                            <label for="auto_refresh" style="font-weight: 500;">Auto Refresh</label>
+                            <label class="switch" style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" id="auto_refresh" name="auto_refresh" {% if auto_refresh
+                                    %}checked{% endif %}>
+                                <span style="font-size: 0.9rem; color: var(--text-secondary);">Enable</span>
+                            </label>
+                        </div>
+
+                        <div style="margin-bottom: 1rem;">
+                            <label for="refresh_interval"
+                                style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Refresh Interval
+                                (minutes)</label>
+                            <input type="number" id="refresh_interval" name="refresh_interval"
+                                value="{{ refresh_interval }}" min="15" required
+                                style="width: 100%; box-sizing: border-box;">
+                        </div>
+
+                        <button type="submit">Save Application Settings</button>
+                    </form>
+
+                    <h3 style="border-top: 1px solid #e2e8f0; padding-top: 2rem;">Add New Feed</h3>
                     <form action="/feeds" method="post" style="max-width: 400px; margin-bottom: 2rem;">
                         <input type="text" name="name" placeholder="Feed Name" required>
                         <input type="url" name="url" placeholder="RSS URL" required>
