@@ -8,7 +8,6 @@ load_dotenv("key.env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -16,7 +15,7 @@ class GeminiSummarizer:
     def __init__(self):
         if not GEMINI_API_KEY:
             print("WARNING: Gemini API Key not found in environment variables. AI features will be disabled.")
-        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         self.last_call_time = 0
         self.min_interval = 2.0  # Minimum 2 seconds between calls (approx 30 RPM)
 
@@ -36,6 +35,7 @@ class GeminiSummarizer:
         try:
             prompt = f"""
             Select the top 10 most important or interesting articles from the following list.
+            Please focus on economic, IT related, social topics more.
             Return ONLY the indices of the selected articles as a comma-separated list (e.g., 0, 2, 5, ...).
             Do not include any other text.
             
