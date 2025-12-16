@@ -50,6 +50,18 @@ def init_db():
         value TEXT
     )
     ''')
+
+    # Create job_status table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS job_status (
+        id TEXT PRIMARY KEY,
+        status TEXT,
+        progress_text TEXT,
+        total_items INTEGER DEFAULT 0,
+        processed_items INTEGER DEFAULT 0,
+        updated_at DATETIME
+    )
+    ''')
     
     conn.commit()
     conn.close()
@@ -157,6 +169,13 @@ def cleanup_old_articles(days=7):
     conn.commit()
     conn.close()
 
+def clear_articles():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM articles")
+    conn.commit()
+    conn.close()
+
 def update_feed_last_fetched(feed_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -196,3 +215,46 @@ def set_setting(key, value):
     )
     conn.commit()
     conn.close()
+
+def update_job_status(job_id, status, progress_text=None, total_items=None, processed_items=None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Build update query dynamically
+    fields = ["status = ?", "updated_at = ?"]
+    values = [status, datetime.utcnow().isoformat()]
+    
+    if progress_text is not None:
+        fields.append("progress_text = ?")
+        values.append(progress_text)
+    if total_items is not None:
+        fields.append("total_items = ?")
+        values.append(total_items)
+    if processed_items is not None:
+        fields.append("processed_items = ?")
+        values.append(processed_items)
+        
+    values.append(job_id)
+    
+    query = f"UPDATE job_status SET {', '.join(fields)} WHERE id = ?"
+    cursor.execute(query, values)
+    
+    if cursor.rowcount == 0:
+        # Insert if not exists
+        cursor.execute(
+            "INSERT INTO job_status (id, status, progress_text, total_items, processed_items, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (job_id, status, progress_text or "", total_items or 0, processed_items or 0, datetime.utcnow().isoformat())
+        )
+        
+    conn.commit()
+    conn.close()
+
+def get_job_status(job_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM job_status WHERE id = ?", (job_id,))
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return dict(result)
+    return None

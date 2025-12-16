@@ -1,15 +1,15 @@
-from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Form, HTTPException, BackgroundTasks
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from database import init_db, add_feed, get_feeds, delete_feed, get_recent_articles, get_last_updated, get_setting, set_setting
+from database import init_db, add_feed, get_feeds, delete_feed, get_recent_articles, get_last_updated, get_setting, set_setting, get_job_status
 from scheduler import start_scheduler, update_feeds_job, update_job_settings
 import uvicorn
 import os
 
 app = FastAPI(title="RSSy2")
 
-# Create templates directory if it doesn't exist (handled by mkdir command, but good to be safe)
+# Create templates directory if it doesn't exist
 if not os.path.exists("templates"):
     os.makedirs("templates")
 
@@ -39,7 +39,6 @@ async def read_root(request: Request):
         "top_articles": top_articles,
         "other_articles": other_articles,
         "feeds": feeds,
-        "feeds": feeds,
         "last_updated": last_updated,
         "auto_refresh": auto_refresh,
         "refresh_interval": refresh_interval
@@ -49,10 +48,6 @@ async def read_root(request: Request):
 async def create_feed(url: str = Form(...), name: str = Form(...)):
     try:
         add_feed(url, name)
-        # Trigger immediate update for the new feed (optional, but good UX)
-        # For simplicity, we might just let the scheduler handle it or run it in background
-        # But user might want to see it immediately.
-        # Let's just redirect for now.
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return RedirectResponse(url="/", status_code=303)
@@ -63,12 +58,18 @@ async def remove_feed(feed_id: str = Form(...)):
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/refresh")
-async def refresh_feeds():
-    # Run update job immediately
-    # Note: This runs synchronously and might block. In production, use background tasks.
-    # But for this simple app, it's okay or we can use BackgroundTasks
-    update_feeds_job()
+async def refresh_feeds(background_tasks: BackgroundTasks):
+    # Trigger update in background
+    background_tasks.add_task(update_feeds_job)
+    # Return immediately to let UI poll for status
     return RedirectResponse(url="/", status_code=303)
+
+@app.get("/job_status")
+async def check_job_status():
+    status = get_job_status('current_refresh')
+    if not status:
+        return {"status": "idle"}
+    return status
 
 @app.post("/settings")
 async def update_settings(auto_refresh: str = Form(None), refresh_interval: int = Form(...)):

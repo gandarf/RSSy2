@@ -1,91 +1,141 @@
-from apscheduler.schedulers.background import BackgroundScheduler
-from database import get_feeds, save_article, update_article_summary, cleanup_old_articles
-from rss_fetcher import fetch_feed
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched, get_setting, clear_articles, update_job_status
+from rss_fetcher import fetch_feed_async
 from summarizer import GeminiSummarizer
 import logging
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-scheduler = BackgroundScheduler()
+# Use AsyncIOScheduler
+scheduler = AsyncIOScheduler()
 summarizer = GeminiSummarizer()
 
-from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched, get_setting
+JOB_ID = 'current_refresh'
 
-def update_feeds_job():
-    logger.info("Starting feed update job...")
-    feeds = get_feeds(active_only=True)
+async def process_article(feed_id, entry, is_top_candidate, semaphore):
+    summary = ""
+    is_top = False
     
-    for feed in feeds:
-        try:
-            logger.info(f"Fetching feed: {feed['name']} ({feed['url']})")
-            parsed_feed = fetch_feed(feed['url'])
-            
-            # Identify new articles by checking URLs
-            all_entries = parsed_feed['entries']
-            
-            # Update last fetched time regardless of new articles
-            update_feed_last_fetched(feed['id'])
+    # Check if this article was selected as Top 10
+    # Note: Logic slightly changed here. 
+    # Instead of batch select then process, we might want to batch select first.
+    # The original code did: select Top 10 indices from ALL new entries.
+    
+    # So process_article will just handle summarization IF it was marked as top.
+    
+    async with semaphore:
+        if is_top_candidate:
+            logger.info(f"Summarizing Top 10 item: {entry['title']}")
+            summary = await summarizer.summarize_short_async(entry['content'])
+            if not summary:
+                 logger.warning("Summarization failed. Using original content as fallback.")
+                 summary = entry['content']
+            is_top = True
+        else:
+            # logger.info(f"Saving standard item: {entry['title']}") 
+            summary = entry['content']
 
-            if not all_entries:
-                continue
+    # Sync DB write
+    save_article(
+        feed_id,
+        entry['title'],
+        entry['link'],
+        entry['published_at'],
+        entry['content'],
+        entry['image_url'],
+        summary=summary,
+        is_top_selection=is_top
+    )
+    return 1 # Processed count
+
+async def update_feeds_job():
+    logger.info("Starting async feed update job...")
+    update_job_status(JOB_ID, "fetching", "Starting update...", 0, 0)
+    
+    # 1. Clear DB
+    logger.info("Clearing existing articles...")
+    clear_articles()
+    
+    # 2. Fetch Feeds
+    feeds = get_feeds(active_only=True)
+    update_job_status(JOB_ID, "fetching", f"Fetching {len(feeds)} feeds...", len(feeds), 0)
+    
+    fetch_tasks = [fetch_feed_async(feed['url']) for feed in feeds]
+    results = await asyncio.gather(*fetch_tasks)
+    
+    all_new_entries = []
+    
+    for i, feed in enumerate(feeds):
+        res = results[i]
+        feed_id = feed['id']
+        entries = res.get('entries', [])
+        
+        if entries:
+            # Update last fetched
+            update_feed_last_fetched(feed_id)
+            
+            # Since we cleared DB, all fetched are "new" effectively.
+            # But filter_new_urls logic is still good if we run frequent updates without clearing?
+            # User requirement: "Fetch할 때 마다 기존 DB는 무시하고 새로 list를 build"
+            # So everything fetched IS new.
+            for entry in entries:
+                entry['feed_id'] = feed_id # Tag with feed ID
+                all_new_entries.append(entry)
                 
-            entry_urls = [entry['link'] for entry in all_entries]
-            new_urls = set(filter_new_urls(entry_urls))
-            
-            new_entries = [entry for entry in all_entries if entry['link'] in new_urls]
-            
-            if not new_entries:
-                logger.info("No new articles found.")
-                continue
-            
-            logger.info(f"Found {len(new_entries)} new articles.")
-            
-            # Select Top 10 from new articles if we have many
-            top_10_indices = []
-            if len(new_entries) > 10:
-                titles = [entry['title'] for entry in new_entries]
-                top_10_indices = summarizer.select_top_10(titles)
-                if not top_10_indices:
-                     logger.warning("Top 10 selection failed (or returned empty). Falling back to first 10 articles.")
-                     top_10_indices = list(range(10))
-                else:
-                    logger.info(f"Selected Top 10 indices: {top_10_indices}")
-            else:
-                top_10_indices = list(range(len(new_entries))) # All are top if <= 10
-            
-            for i, entry in enumerate(new_entries):
-                summary = ""
-                is_top = False
-                
-                if i in top_10_indices:
-                    logger.info(f"Summarizing Top 10 item: {entry['title']}")
-                    summary = summarizer.summarize_short(entry['content'])
-                    if not summary:
-                         logger.warning("Summarization failed. Using original content as fallback.")
-                         summary = entry['content']
-                    is_top = True
-                else:
-                    logger.info(f"Saving standard item (no AI summary): {entry['title']}")
-                    # Use description/content as is, no AI summary
-                    summary = entry['content'] # Or description
-                    
-                save_article(
-                    feed['id'],
-                    entry['title'],
-                    entry['link'],
-                    entry['published_at'],
-                    entry['content'],
-                    entry['image_url'],
-                    summary=summary,
-                    is_top_selection=is_top
-                )
-                    
+    update_job_status(JOB_ID, "processing", f"Found {len(all_new_entries)} articles. Selecting Top 10...", len(all_new_entries), 0)
+    
+    if not all_new_entries:
+        logger.info("No articles found.")
+        update_job_status(JOB_ID, "completed", "No articles found.", 0, 0)
+        return
+
+    # 3. Select Top 10
+    top_10_indices = []
+    titles = [entry['title'] for entry in all_new_entries]
+    
+    if len(titles) > 10:
+        top_10_indexes_result = await summarizer.select_top_10_async(titles)
+        if not top_10_indexes_result:
+             logger.warning("Top 10 selection failed. Fallback to first 10.")
+             top_10_indices = list(range(10))
+        else:
+            top_10_indices = top_10_indexes_result
+            logger.info(f"Selected Top 10 indices: {top_10_indices}")
+    else:
+        top_10_indices = list(range(len(titles)))
+
+    top_10_set = set(top_10_indices)
+    
+    # 4. Process/Summarize Articles
+    update_job_status(JOB_ID, "summarizing", "Summarizing articles...", len(all_new_entries), 0)
+    
+    semaphore = asyncio.Semaphore(3) # Limit concurrent AI calls
+    process_tasks = []
+    
+    processed_count = 0
+    
+    async def process_wrapper(idx, entry):
+        nonlocal processed_count
+        try:
+            is_top = idx in top_10_set
+            await process_article(entry['feed_id'], entry, is_top, semaphore)
         except Exception as e:
-            logger.error(f"Error updating feed {feed['url']}: {e}")
-            
-    # Cleanup old articles
+            logger.error(f"Error processing article {entry.get('title', 'Unknown')}: {e}")
+        finally:
+            processed_count += 1
+            # Update status
+            update_job_status(JOB_ID, "summarizing", f"Processing... {processed_count}/{len(all_new_entries)}", len(all_new_entries), processed_count)
+
+    for i, entry in enumerate(all_new_entries):
+        process_tasks.append(process_wrapper(i, entry))
+        
+    await asyncio.gather(*process_tasks)
+    
+    # 5. Cleanup
     cleanup_old_articles(days=7)
+    update_job_status(JOB_ID, "completed", "Update completed.", len(all_new_entries), len(all_new_entries))
     logger.info("Feed update job completed.")
 
 def start_scheduler():

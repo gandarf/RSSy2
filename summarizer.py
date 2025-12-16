@@ -60,7 +60,7 @@ class GeminiSummarizer:
         
         prompt = f"""
         Select the top 10 most important or interesting articles from the following list.
-        Please focus on economic, IT related, social topics more.
+        Please focus on economic, technical and social topics more. If there's no text to review, just ignore it.
         Return ONLY the indices of the selected articles as a comma-separated list (e.g., 0, 2, 5, ...).
         Do not include any other text.
         
@@ -92,7 +92,7 @@ class GeminiSummarizer:
 
         length_instruction = "keep it concise."
         if max_length:
-            length_instruction = f"summarize it up to 4 lines."
+            length_instruction = f"summarize it up to {max_length} characters."
 
         prompt = f"""
         Please summarize the following article in Korean. 
@@ -111,3 +111,91 @@ class GeminiSummarizer:
             
     def summarize_short(self, content):
         return self.summarize(content, max_length=250)
+
+    async def _call_with_retry_async(self, func, *args, **kwargs):
+        """Generic async retry wrapper for API calls"""
+        import asyncio
+        for attempt in range(self.max_retries):
+            # Calculate wait time asynchronously
+            elapsed = time.time() - self.last_call_time
+            if elapsed < self.min_interval:
+                await asyncio.sleep(self.min_interval - elapsed)
+
+            try:
+                result = await func(*args, **kwargs)
+                self.last_call_time = time.time()
+                return result
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "quota" in error_str.lower():
+                    wait_time = (2 ** attempt) * 4
+                    print(f"Rate limit hit ({error_str}). Retrying in {wait_time} seconds...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise e
+        raise Exception("Max retries exceeded for Gemini API call")
+
+    async def select_top_10_async(self, titles):
+        if not GEMINI_API_KEY:
+            return []
+        
+        titles_text = "\n".join([f"{i}. {t}" for i, t in enumerate(titles)])
+        prompt = f"""
+        Select the top 10 most important or interesting articles from the following list.
+        Please focus on economic and technical topics more. If there's no text to review, just ignore it.
+        Return ONLY the indices of the selected articles as a comma-separated list (e.g., 0, 2, 5, ...).
+        Do not include any other text.
+        
+        Articles:
+        {titles_text}
+        """
+
+        try:
+            # Check if model has generate_content_async
+            if hasattr(self.model, 'generate_content_async'):
+                response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
+            else:
+                # Fallback to sync wrapped in thread if async not available (sanity check)
+                import asyncio
+                response = await asyncio.to_thread(self._call_with_retry, self.model.generate_content, prompt)
+
+            text = response.text.strip()
+            indices = [int(x.strip()) for x in text.split(',') if x.strip().isdigit()]
+            return indices[:10]
+        except Exception as e:
+            print(f"Error selecting top 10 (async): {e}")
+            return []
+
+    async def summarize_async(self, content, max_lines=None):
+        if not GEMINI_API_KEY:
+            return None 
+
+        text = self._clean_text(content)
+        if not text:
+            return None
+
+        length_instruction = "keep it concise."
+        if max_lines:
+            length_instruction = f"summarize it up to {max_lines} lines."
+
+        prompt = f"""
+        Please summarize the following article in Korean. 
+        Focus on the main points and {length_instruction}
+        
+        Article:
+        {text}
+        """
+        
+        try:
+            if hasattr(self.model, 'generate_content_async'):
+                response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
+            else:
+                import asyncio
+                response = await asyncio.to_thread(self._call_with_retry, self.model.generate_content, prompt)
+            return response.text
+        except Exception as e:
+            print(f"Error summarizing (async): {e}")
+            return None
+
+    async def summarize_short_async(self, content, max_lines=10):
+        return await self.summarize_async(content, max_lines=max_lines)

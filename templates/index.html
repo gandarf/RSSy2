@@ -306,6 +306,68 @@
             </div>
         </header>
 
+        <!-- Progress Bar (Initially Hidden) -->
+        <div id="progress-container" style="display: none; background: #e0f2fe; padding: 1rem; border-radius: 0.5rem; margin-bottom: 2rem; border: 1px solid #bae6fd;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span id="progress-text" style="font-weight: 500; color: #0369a1;">Updating...</span>
+                <span id="progress-percent" style="font-weight: 600; color: #0284c7;">0%</span>
+            </div>
+            <div style="background: #ffffff; border-radius: 999px; height: 10px; width: 100%; overflow: hidden;">
+                <div id="progress-bar" style="background: #0ea5e9; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+
+        <script>
+            async function checkStatus() {
+                try {
+                    const response = await fetch('/job_status');
+                    const data = await response.json();
+                    
+                    const container = document.getElementById('progress-container');
+                    const text = document.getElementById('progress-text');
+                    const bar = document.getElementById('progress-bar');
+                    const percent = document.getElementById('progress-percent');
+                    
+                    if (data.status === 'fetching' || data.status === 'summarizing' || data.status === 'processing') {
+                        container.style.display = 'block';
+                        text.textContent = data.progress_text;
+                        
+                        let pct = 0;
+                        if (data.total_items > 0) {
+                            pct = Math.round((data.processed_items / data.total_items) * 100);
+                        } else if (data.status === 'fetching') {
+                             pct = 10; // Fake progress for fetching start
+                        }
+                        
+                        bar.style.width = pct + '%';
+                        percent.textContent = pct + '%';
+                    } else if (data.status === 'completed') {
+                        if (container.style.display === 'block') {
+                            container.style.display = 'block'; // Keep showing for a moment?
+                            text.textContent = "Update Complete! reloading...";
+                            bar.style.width = '100%';
+                            percent.textContent = '100%';
+                            
+                            // Reload page after a short delay to show new articles
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        } else {
+                             container.style.display = 'none';
+                        }
+                    } else {
+                        container.style.display = 'none';
+                    }
+                } catch (e) {
+                    console.error("Error polling status:", e);
+                }
+            }
+            
+            // Poll every 1 second
+            setInterval(checkStatus, 1000);
+            checkStatus(); // Initial check
+        </script>
+
         <main class="articles">
             <!-- Top 10 Featured Section -->
             {% if top_articles %}
