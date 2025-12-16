@@ -104,3 +104,48 @@ async def fetch_feed_async(feed_url):
         except Exception as e:
             print(f"Error fetching {feed_url}: {e}")
             return {'title': 'Error', 'entries': []}
+
+async def fetch_article_body_async(url):
+    """
+    Fetches the full HTML content of the article and extracts text using BeautifulSoup.
+    This is used for Top 10 articles to get better summarization context.
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as response:
+                if response.status != 200:
+                    return ""
+                
+                html = await response.text()
+                # Use thread for parsing
+                return await asyncio.to_thread(_extract_text_from_html, html)
+    except Exception as e:
+        print(f"Error fetching article body {url}: {e}")
+        return ""
+
+def _extract_text_from_html(html):
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            script.decompose()
+
+        # Try to find the main article content
+        # Heuristics: look for <article>, or div with class 'content', 'article', etc.
+        # But for generic purposes, extracting all <p> tags is often a good baseline 
+        # combined with some density checking, but let's stick to simple <p> extraction for now as requested.
+        
+        paragraphs = soup.find_all('p')
+        text = ' '.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 20])
+        
+        if not text:
+            # Fallback: get body text if p tags are empty
+            text = soup.get_text(separator=' ', strip=True)
+            
+        return text
+    except Exception:
+        return ""

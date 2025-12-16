@@ -6,6 +6,7 @@ from database import init_db, add_feed, get_feeds, delete_feed, get_recent_artic
 from scheduler import start_scheduler, update_feeds_job, update_job_settings
 import uvicorn
 import os
+from datetime import datetime, timedelta
 
 app = FastAPI(title="RSSy2")
 
@@ -29,6 +30,12 @@ async def read_root(request: Request):
     other_articles = [a for a in articles if not a['is_top_selection']]
     
     last_updated = get_last_updated()
+    if last_updated:
+        try:
+            dt = datetime.fromisoformat(last_updated)
+            last_updated = (dt + timedelta(hours=9)).isoformat()
+        except:
+            pass
     
     # Get Settings
     auto_refresh = get_setting('auto_refresh', 'true') == 'true'

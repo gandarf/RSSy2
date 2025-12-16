@@ -1,6 +1,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched, get_setting, clear_articles, update_job_status
-from rss_fetcher import fetch_feed_async
+from rss_fetcher import fetch_feed_async, fetch_article_body_async
 from summarizer import GeminiSummarizer
 import logging
 import asyncio
@@ -28,10 +28,15 @@ async def process_article(feed_id, entry, is_top_candidate, semaphore):
     async with semaphore:
         if is_top_candidate:
             logger.info(f"Summarizing Top 10 item: {entry['title']}")
-            summary = await summarizer.summarize_short_async(entry['content'])
+            
+            # Fetch full content for top articles
+            full_content = await fetch_article_body_async(entry['link'])
+            context_content = full_content if full_content else entry['content']
+            
+            summary = await summarizer.summarize_short_async(context_content)
             if not summary:
                  logger.warning("Summarization failed. Using original content as fallback.")
-                 summary = entry['content']
+                 summary = context_content[:500] + "..." # Truncate fallback
             is_top = True
         else:
             # logger.info(f"Saving standard item: {entry['title']}") 

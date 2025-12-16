@@ -92,7 +92,7 @@ class GeminiSummarizer:
 
         length_instruction = "keep it concise."
         if max_length:
-            length_instruction = f"summarize it up to {max_length} characters."
+            length_instruction = f"summarize it up to {max_length} lines."
 
         prompt = f"""
         Please summarize the following article in Korean. 
@@ -110,7 +110,7 @@ class GeminiSummarizer:
             return None # Return None on failure to trigger fallback
             
     def summarize_short(self, content):
-        return self.summarize(content, max_length=250)
+        return self.summarize(content, max_lines=10)
 
     async def _call_with_retry_async(self, func, *args, **kwargs):
         """Generic async retry wrapper for API calls"""
