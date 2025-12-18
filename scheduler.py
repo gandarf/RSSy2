@@ -1,18 +1,18 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import get_feeds, save_article, update_article_summary, cleanup_old_articles, filter_new_urls, update_feed_last_fetched, get_setting, clear_articles, update_job_status
 from rss_fetcher import fetch_feed_async, fetch_article_body_async
+from clien_fetcher import fetch_clien_list, fetch_clien_article_full
 from summarizer import GeminiSummarizer
-import logging
+from logger_config import logger
 import asyncio
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from datetime import datetime
 
 # Use AsyncIOScheduler
 scheduler = AsyncIOScheduler()
 summarizer = GeminiSummarizer()
 
 JOB_ID = 'current_refresh'
+CLIEN_FEED_ID = 'clien-community'
 
 async def process_article(feed_id, entry, is_top_candidate, semaphore):
     summary = ""
@@ -139,9 +139,64 @@ async def update_feeds_job():
     await asyncio.gather(*process_tasks)
     
     # 5. Cleanup
+    # 5. Cleanup
     cleanup_old_articles(days=7)
+    
+    # 6. Trigger Clien Update (Sequential for now to share resources/status)
+    await update_clien_job()
+    
     update_job_status(JOB_ID, "completed", "Update completed.", len(all_new_entries), len(all_new_entries))
     logger.info("Feed update job completed.")
+    
+async def update_clien_job():
+    logger.info("Starting Clien update...")
+    update_job_status(JOB_ID, "processing", "Fetching Clien News...", 0, 0)
+    
+    # 1. Fetch List
+    candidates = await fetch_clien_list()
+    if not candidates:
+        logger.warning("No Clien articles found.")
+        return
+
+    # 2. Select Top 10
+    update_job_status(JOB_ID, "processing", f"Found {len(candidates)} Clien articles. Selecting Top 10...", len(candidates), 0)
+    
+    selected_indices = await summarizer.select_clien_candidates_async(candidates)
+    logger.info(f"Selected Clien indices: {selected_indices}")
+    
+    # 3. Process Top 10
+    update_job_status(JOB_ID, "summarizing", "Summarizing Clien articles...", len(selected_indices), 0)
+    
+    semaphore = asyncio.Semaphore(2) # Conservative limit
+    
+    async def process_clien_item(idx, item):
+        async with semaphore:
+            full_content = await fetch_clien_article_full(item['link'])
+            context = full_content if full_content else item['title']
+            
+            summary = await summarizer.summarize_short_async(context)
+            if not summary:
+                 summary = "Summary failed."
+
+            # Save to DB with special feed ID
+            # We assume save_article handles ID generation
+            save_article(
+                CLIEN_FEED_ID,
+                item['title'],
+                item['link'],
+                datetime.utcnow().isoformat(), # Now
+                full_content, # Raw content
+                summary=summary,
+                is_top_selection=True # All selected are "top" for this feed
+            )
+
+    tasks = []
+    for i in selected_indices:
+        if i < len(candidates):
+            tasks.append(process_clien_item(i, candidates[i]))
+            
+    await asyncio.gather(*tasks)
+    logger.info("Clien update finished.")
 
 def start_scheduler():
     interval_minutes = int(get_setting('refresh_interval', 120))

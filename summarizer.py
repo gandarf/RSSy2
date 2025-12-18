@@ -3,6 +3,7 @@ import time
 import google.generativeai as genai
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from logger_config import logger
 
 load_dotenv("key.env")
 
@@ -69,6 +70,7 @@ class GeminiSummarizer:
         """
 
         try:
+            logger.info(f"Gemini select_top_10 prompt:\n{prompt}")
             # Wrap the generation call
             response = self._call_with_retry(self.model.generate_content, prompt)
             
@@ -87,6 +89,7 @@ class GeminiSummarizer:
             return None # Return None on API key error to fallback
 
         text = self._clean_text(content)
+        print(f"DEBUG_TEXT: {text}")
         if not text:
             return None
 
@@ -95,14 +98,18 @@ class GeminiSummarizer:
             length_instruction = f"summarize it up to {max_length} lines."
 
         prompt = f"""
-        Please summarize the following article in Korean. 
-        Focus on the main points and {length_instruction}
+        Analyze the following article content and synthesize a concise summary of the key points in Korean.
+        Do not just copy or translate sentences directly. Rewrite the main ideas in your own words.
+        Use a professional and objective tone.
+        Use Markdown formatting (bullet points, bolding) to make it easy to read.
+        {length_instruction}
         
         Article:
         {text}
         """
         
         try:
+            logger.info(f"Gemini summarize prompt:\n{prompt}")
             response = self._call_with_retry(self.model.generate_content, prompt)
             return response.text
         except Exception as e:
@@ -151,6 +158,7 @@ class GeminiSummarizer:
         """
 
         try:
+            logger.info(f"Gemini select_top_10_async prompt:\n{prompt}")
             # Check if model has generate_content_async
             if hasattr(self.model, 'generate_content_async'):
                 response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
@@ -166,11 +174,55 @@ class GeminiSummarizer:
             print(f"Error selecting top 10 (async): {e}")
             return []
 
+    async def select_clien_candidates_async(self, candidates):
+        """
+        Select Top 10 from Clien news based on comment count and keywords.
+        candidates: list of dict {'title', 'comment_count'}
+        """
+        if not GEMINI_API_KEY:
+            # Fallback: Sort by comment count
+            sorted_indices = sorted(range(len(candidates)), key=lambda k: candidates[k]['comment_count'], reverse=True)
+            return sorted_indices[:10]
+            
+        # Format for prompt
+        # "Index. [Comments: N] Title"
+        items_text = "\n".join([f"{i}. [Comments: {c['comment_count']}] {c['title']}" for i, c in enumerate(candidates)])
+        
+        prompt = f"""
+        Select the Top 10 articles from the following list from a tech community.
+        Criteria:
+        1. High comment count (indicates popularity/controversy).
+        2. Relevance to keywords: Google, Apple, Samsung Electronics, Galaxy, TV.
+        
+        Prioritize articles that match the keywords AND have high engagement.
+        Return ONLY the indices of the selected articles as a comma-separated list.
+        
+        Articles:
+        {items_text}
+        """
+        
+        try:
+             logger.info(f"Gemini select_clien_candidates_async prompt:\n{prompt}")
+             if hasattr(self.model, 'generate_content_async'):
+                response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
+             else:
+                import asyncio
+                response = await asyncio.to_thread(self._call_with_retry, self.model.generate_content, prompt)
+             
+             text = response.text.strip()
+             indices = [int(x.strip()) for x in text.split(',') if x.strip().isdigit()]
+             return indices[:10]
+        except Exception as e:
+            print(f"Error selecting Clien candidates: {e}")
+            # Fallback
+            return sorted(range(len(candidates)), key=lambda k: candidates[k]['comment_count'], reverse=True)[:10]
+
     async def summarize_async(self, content, max_lines=None):
         if not GEMINI_API_KEY:
             return None 
 
         text = self._clean_text(content)
+        print(f"DEBUG_TEXT: {text}")
         if not text:
             return None
 
@@ -179,14 +231,18 @@ class GeminiSummarizer:
             length_instruction = f"summarize it up to {max_lines} lines."
 
         prompt = f"""
-        Please summarize the following article in Korean. 
-        Focus on the main points and {length_instruction}
+        Analyze the following article content and synthesize a concise summary of the key points in Korean.
+        Do not just copy or translate sentences directly. Rewrite the main ideas in your own words.
+        Use a professional and objective tone.
+        Use Markdown formatting (bullet points, bolding) to make it easy to read.
+        {length_instruction}
         
         Article:
         {text}
         """
         
         try:
+            logger.info(f"Gemini summarize_async prompt:\n{prompt}")
             if hasattr(self.model, 'generate_content_async'):
                 response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
             else:

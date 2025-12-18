@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RSSy2 - AI News Briefing</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
             --primary-color: #2563eb;
@@ -226,12 +227,22 @@
         }
 
         .article-summary {
-            background-color: #f8fafc;
-            padding: 1rem;
-            border-radius: 0.375rem;
-            border-left: 4px solid var(--primary-color);
             margin-bottom: 1rem;
             font-size: 0.95rem;
+        }
+
+        .article-summary ul,
+        .article-summary ol {
+            padding-left: 1.5rem;
+            margin: 0.5rem 0;
+        }
+
+        .article-summary p {
+            margin: 0.5rem 0;
+        }
+
+        .article-summary strong {
+            color: var(--primary-color);
         }
 
         .article-image {
@@ -374,7 +385,7 @@
         <!-- Tab Navigation -->
         <nav class="tabs">
             <button class="tab-btn active" onclick="openTab('report')">Report</button>
-            <button class="tab-btn" onclick="openTab('analysis')">Analysis</button>
+            <button class="tab-btn" onclick="openTab('analysis')">Clien</button>
             <button class="tab-btn" onclick="openTab('settings')">Settings</button>
         </nav>
 
@@ -397,8 +408,8 @@
                                 <h2 class="article-title">
                                     <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
                                 </h2>
-                                <div class="article-summary">
-                                    <strong>AI Summary:</strong> {{ article.summary }}
+                                <div class="article-summary markdown-body" data-markdown="{{ article.summary }}">
+                                    <!-- Markdown rendered here -->
                                 </div>
                             </div>
                             {% if article.image_url %}
@@ -447,21 +458,73 @@
             </main>
         </div>
 
-        <!-- Tab 2: Analysis (Empty for now) -->
+        <!-- Tab 2: Analysis (Clien News) -->
         <div id="tab-analysis" class="tab-content">
-            <div class="article-card">
-                <div class="article-content" style="text-align: center; padding: 3rem;">
-                    <h3>Analysis Content Placehloder</h3>
-                    <p style="color: var(--text-secondary);">Future implementation...</p>
-                </div>
-            </div>
+            <main class="articles">
+                <section class="section-featured">
+                    <h2 class="section-title">📱 Community Top Picks (Clien)</h2>
+
+                    {% if not clien_articles %}
+                    <div class="article-card">
+                        <div class="article-content">
+                            <p style="text-align:center; color:var(--text-secondary);">
+                                No community data found yet. Click Refresh to update.
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="featured-grid">
+                        {% for article in clien_articles %}
+                        <article class="article-card featured-card" style="border-left-color: #ec4899;">
+                            <div class="article-content">
+                                <div class="article-meta">
+                                    <span class="badge-top" style="background-color: #ec4899;">HOT TOPIC</span>
+                                    <span>Clien News</span>
+                                    <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
+                                </div>
+                                <h2 class="article-title">
+                                    <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
+                                </h2>
+                                <div class="article-summary markdown-body" style="border-left-color: #ec4899;"
+                                    data-markdown="{{ article.summary }}">
+                                    <!-- Markdown rendered here -->
+                                </div>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
+            </main>
         </div>
 
         <!-- Tab 3: Settings -->
         <div id="tab-settings" class="tab-content">
             <div class="settings-content"
                 style="padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                <h3>General Settings</h3>
+
+                {% if not authenticated %}
+                <div id="pin-entry" style="text-align: center; padding: 2rem 0;">
+                    <h3 style="margin-bottom: 1.5rem;">🔒 Administrator Access Required</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Please enter the PIN to unlock
+                        settings.</p>
+                    <form id="pin-form" onsubmit="submitPin(event)" style="max-width: 300px; margin: 0 auto;">
+                        <input type="password" id="pin-input" placeholder="Enter PIN" required
+                            style="text-align: center; font-size: 1.2rem; letter-spacing: 0.5rem; margin-bottom: 1rem;">
+                        <button type="submit">Unlock Settings</button>
+                    </form>
+                    <div id="pin-error" style="color: #ef4444; margin-top: 1rem; display: none; font-weight: 500;">
+                    </div>
+                </div>
+                {% else %}
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; margin-bottom: 2rem;">
+                    <h3 style="margin: 0;">General Settings</h3>
+                    <form action="/logout" method="post" style="margin: 0;">
+                        <button type="submit" class="btn btn-secondary"
+                            style="padding: 0.25rem 0.75rem;">Logout</button>
+                    </form>
+                </div>
                 <form action="/settings" method="post"
                     style="max-width: 400px; margin-bottom: 2rem; background: #f8fafc; padding: 1rem; border-radius: 0.5rem;">
                     <div
@@ -505,6 +568,7 @@
                     </li>
                     {% endfor %}
                 </ul>
+                {% endif %}
             </div>
         </div>
 
@@ -529,7 +593,7 @@
                 // Find the button that clicked this (simple approach) or match context
                 Array.from(buttons).forEach(btn => {
                     if (btn.textContent.trim().toLowerCase() === tabName ||
-                        (tabName === 'analysis' && btn.textContent.trim() === 'Analysis') ||
+                        (tabName === 'analysis' && btn.textContent.trim() === 'Clien') ||
                         (tabName === 'report' && btn.textContent.trim() === 'Report')) {
                         btn.classList.add("active");
                     }
@@ -586,503 +650,51 @@
             // Poll every 1 second
             setInterval(checkStatus, 1000);
             checkStatus(); // Initial check
-        </script>
-    </div>
-</body>
 
-</html>
-<html lang="ko">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSSy2 - AI News Briefing</title>
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --text-color: #1e293b;
-            --text-secondary: #64748b;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary-color);
-            margin: 0;
-        }
-
-        .controls {
-            display: flex;
-            gap: 1rem;
-        }
-
-        button,
-        .btn {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 0.375rem;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: background-color 0.2s;
-            text-decoration: none;
-        }
-
-        button:hover,
-        .btn:hover {
-            background-color: #1d4ed8;
-        }
-
-        .btn-secondary {
-            background-color: #e2e8f0;
-            color: var(--text-color);
-        }
-
-        .btn-secondary:hover {
-            background-color: #cbd5e1;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 2rem;
-        }
-
-        .sidebar {
-            background: var(--card-bg);
-            padding: 1.5rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            height: fit-content;
-        }
-
-        .feed-list {
-            list-style: none;
-            padding: 0;
-            margin: 1rem 0;
-        }
-
-        .feed-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .feed-item:last-child {
-            border-bottom: none;
-        }
-
-        .feed-name {
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-
-        .delete-btn {
-            background: none;
-            color: #ef4444;
-            padding: 0.25rem;
-            font-size: 0.8rem;
-        }
-
-        .delete-btn:hover {
-            background: #fee2e2;
-        }
-
-        .articles {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .article-card {
-            background: var(--card-bg);
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            display: flex;
-            flex-direction: row;
-            padding: 1.5rem;
-            gap: 1.5rem;
-            align-items: flex-start;
-        }
-
-        .article-content {
-            padding: 0;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .article-meta {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-            display: flex;
-            gap: 1rem;
-        }
-
-        .article-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin: 0 0 1rem 0;
-            line-height: 1.4;
-        }
-
-        .article-title a {
-            color: var(--text-color);
-            text-decoration: none;
-        }
-
-        .article-title a:hover {
-            color: var(--primary-color);
-        }
-
-        .article-summary {
-            background-color: #f8fafc;
-            padding: 1rem;
-            border-radius: 0.375rem;
-            border-left: 4px solid var(--primary-color);
-            margin-bottom: 1rem;
-            font-size: 0.95rem;
-        }
-
-        .article-image {
-            width: 120px;
-            height: 120px;
-            object-fit: cover;
-            border-radius: 0.375rem;
-            flex-shrink: 0;
-        }
-
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        input {
-            padding: 0.5rem;
-            border: 1px solid #cbd5e1;
-            border-radius: 0.375rem;
-        }
-
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            color: var(--text-color);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .section-featured {
-            margin-bottom: 3rem;
-        }
-
-        .featured-grid {
-            display: grid;
-            gap: 1.5rem;
-        }
-
-        .featured-card {
-            border-left: 5px solid var(--primary-color);
-        }
-
-        .badge-top {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 0.2rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .standard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .standard-card {
-            flex-direction: column;
-            padding: 1.25rem;
-        }
-
-        .standard-card .article-title-sm {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin: 0 0 0.5rem 0;
-            line-height: 1.4;
-        }
-
-        .standard-card .article-title-sm a {
-            color: var(--text-color);
-            text-decoration: none;
-        }
-
-        .standard-card .article-title-sm a:hover {
-            color: var(--primary-color);
-        }
-
-        .standard-card .article-snippet {
-            font-size: 0.9rem;
-            color: #4b5563;
-            margin: 0;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
+            // Markdown Rendering Engine
+            function renderMarkdown() {
+                document.querySelectorAll('.markdown-body').forEach(el => {
+                    const raw = el.getAttribute('data-markdown');
+                    if (raw && !el.classList.contains('rendered')) {
+                        el.innerHTML = marked.parse(raw);
+                        el.classList.add('rendered');
+                    }
+                });
             }
 
-            .article-image {
-                width: 80px;
-                height: 80px;
-            }
+            // Initial render
+            document.addEventListener('DOMContentLoaded', renderMarkdown);
+            // Also run after status updates (if page doesn't reload)
+            window.addEventListener('load', renderMarkdown);
 
-            .standard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-</head>
+            // PIN Verification
+            async function submitPin(event) {
+                event.preventDefault();
+                const pin = document.getElementById('pin-input').value;
+                const error = document.getElementById('pin-error');
 
-<body>
-    <div class="container">
-        <header>
-            <div>
-                <h1>RSSy2</h1>
-                {% if last_updated %}
-                <small style="color: var(--text-secondary); font-size: 0.9rem;">Last Report: {{
-                    last_updated[:16].replace('T', ' ') }}</small>
-                {% endif %}
-            </div>
-            <div class="controls">
-                <form action="/refresh" method="post" style="margin:0;">
-                    <button type="submit">🔄 Refresh Now</button>
-                </form>
-            </div>
-        </header>
-
-        <!-- Progress Bar (Initially Hidden) -->
-        <div id="progress-container"
-            style="display: none; background: #e0f2fe; padding: 1rem; border-radius: 0.5rem; margin-bottom: 2rem; border: 1px solid #bae6fd;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                <span id="progress-text" style="font-weight: 500; color: #0369a1;">Updating...</span>
-                <span id="progress-percent" style="font-weight: 600; color: #0284c7;">0%</span>
-            </div>
-            <div style="background: #ffffff; border-radius: 999px; height: 10px; width: 100%; overflow: hidden;">
-                <div id="progress-bar"
-                    style="background: #0ea5e9; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-            </div>
-        </div>
-
-        <script>
-            async function checkStatus() {
                 try {
-                    const response = await fetch('/job_status');
-                    const data = await response.json();
+                    const formData = new FormData();
+                    formData.append('pin', pin);
 
-                    const container = document.getElementById('progress-container');
-                    const text = document.getElementById('progress-text');
-                    const bar = document.getElementById('progress-bar');
-                    const percent = document.getElementById('progress-percent');
+                    const response = await fetch('/verify_pin', {
+                        method: 'POST',
+                        body: formData
+                    });
 
-                    if (data.status === 'fetching' || data.status === 'summarizing' || data.status === 'processing') {
-                        container.style.display = 'block';
-                        text.textContent = data.progress_text;
-
-                        let pct = 0;
-                        if (data.total_items > 0) {
-                            pct = Math.round((data.processed_items / data.total_items) * 100);
-                        } else if (data.status === 'fetching') {
-                            pct = 10; // Fake progress for fetching start
-                        }
-
-                        bar.style.width = pct + '%';
-                        percent.textContent = pct + '%';
-                    } else if (data.status === 'completed') {
-                        if (container.style.display === 'block') {
-                            container.style.display = 'block'; // Keep showing for a moment?
-                            text.textContent = "Update Complete! reloading...";
-                            bar.style.width = '100%';
-                            percent.textContent = '100%';
-
-                            // Reload page after a short delay to show new articles
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 1000);
-                        } else {
-                            container.style.display = 'none';
-                        }
+                    if (response.ok) {
+                        window.location.reload();
                     } else {
-                        container.style.display = 'none';
+                        const data = await response.json();
+                        error.textContent = data.message || "Invalid PIN";
+                        error.style.display = 'block';
                     }
                 } catch (e) {
-                    console.error("Error polling status:", e);
+                    error.textContent = "Connection error. Please try again.";
+                    error.style.display = 'block';
                 }
             }
-
-            // Poll every 1 second
-            setInterval(checkStatus, 1000);
-            checkStatus(); // Initial check
         </script>
-
-        <main class="articles">
-            <!-- Top 10 Featured Section -->
-            {% if top_articles %}
-            <section class="section-featured">
-                <h2 class="section-title">🌟 Today's Top 10 Briefing</h2>
-                <div class="featured-grid">
-                    {% for article in top_articles %}
-                    <article class="article-card featured-card">
-                        <div class="article-content">
-                            <div class="article-meta">
-                                <span class="badge-top">TOP PICK</span>
-                                <span>{{ article.feed_name }}</span>
-                                <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
-                            </div>
-                            <h2 class="article-title">
-                                <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
-                            </h2>
-                            <div class="article-summary">
-                                <strong>AI Summary:</strong> {{ article.summary }}
-                            </div>
-                        </div>
-                        {% if article.image_url %}
-                        <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
-                            onerror="this.style.display='none'">
-                        {% endif %}
-                    </article>
-                    {% endfor %}
-                </div>
-            </section>
-            {% endif %}
-
-            <!-- Standard News Section -->
-            <section class="section-standard">
-                <h2 class="section-title">📰 Latest News Feed</h2>
-
-                {% if not top_articles and not other_articles %}
-                <div class="article-card">
-                    <div class="article-content">
-                        <p style="text-align:center; color:var(--text-secondary);">
-                            No articles found. Add a feed or click Refresh.
-                        </p>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="standard-grid">
-                    {% for article in other_articles %}
-                    <article class="article-card standard-card">
-                        <div class="article-content">
-                            <div class="article-meta">
-                                <span>{{ article.feed_name }}</span>
-                                <span>{{ article.published_at[:16].replace('T', ' ') }}</span>
-                            </div>
-                            <h3 class="article-title-sm">
-                                <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
-                            </h3>
-                            <p class="article-snippet">
-                                {{ article.summary[:150] }}...
-                            </p>
-                        </div>
-                    </article>
-                    {% endfor %}
-                </div>
-            </section>
-        </main>
-
-        <hr style="margin: 3rem 0; border: 0; border-top: 1px solid #e2e8f0;">
-
-        <section class="settings" style="margin-bottom: 3rem;">
-            <details>
-                <summary style="font-size: 1.2rem; font-weight: 600; cursor: pointer; color: var(--text-color);"> Manage
-                    Feeds (Settings) </summary>
-                <div class="settings-content"
-                    style="margin-top: 1rem; padding: 1.5rem; background: var(--card-bg); border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                    <h3>General Settings</h3>
-                    <form action="/settings" method="post"
-                        style="max-width: 400px; margin-bottom: 2rem; background: #f8fafc; padding: 1rem; border-radius: 0.5rem;">
-                        <div
-                            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                            <label for="auto_refresh" style="font-weight: 500;">Auto Refresh</label>
-                            <label class="switch" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" id="auto_refresh" name="auto_refresh" {% if auto_refresh
-                                    %}checked{% endif %}>
-                                <span style="font-size: 0.9rem; color: var(--text-secondary);">Enable</span>
-                            </label>
-                        </div>
-
-                        <div style="margin-bottom: 1rem;">
-                            <label for="refresh_interval"
-                                style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Refresh Interval
-                                (minutes)</label>
-                            <input type="number" id="refresh_interval" name="refresh_interval"
-                                value="{{ refresh_interval }}" min="15" required
-                                style="width: 100%; box-sizing: border-box;">
-                        </div>
-
-                        <button type="submit">Save Application Settings</button>
-                    </form>
-
-                    <h3 style="border-top: 1px solid #e2e8f0; padding-top: 2rem;">Add New Feed</h3>
-                    <form action="/feeds" method="post" style="max-width: 400px; margin-bottom: 2rem;">
-                        <input type="text" name="name" placeholder="Feed Name" required>
-                        <input type="url" name="url" placeholder="RSS URL" required>
-                        <button type="submit">Add Feed</button>
-                    </form>
-
-                    <h3>Current Feeds</h3>
-                    <ul class="feed-list">
-                        {% for feed in feeds %}
-                        <li class="feed-item">
-                            <span class="feed-name">{{ feed.name }} ({{ feed.url }})</span>
-                            <form action="/feeds/delete" method="post" style="display:inline;">
-                                <input type="hidden" name="feed_id" value="{{ feed.id }}">
-                                <button type="submit" class="delete-btn">✕</button>
-                            </form>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </details>
-        </section>
     </div>
 </body>
 

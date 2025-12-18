@@ -1,6 +1,7 @@
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
+from logger_config import logger
 
 DB_NAME = "rssy2.db"
 
@@ -10,6 +11,7 @@ def get_db_connection():
     return conn
 
 def init_db():
+    logger.info(f"Initializing database: {DB_NAME}")
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -63,6 +65,14 @@ def init_db():
     )
     ''')
     
+    # Insert Clien placeholder feed if not exists
+    cursor.execute("SELECT id FROM feeds WHERE id = 'clien-community'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO feeds (id, url, name, is_active, last_fetched_at) VALUES (?, ?, ?, ?, ?)",
+            ('clien-community', 'https://www.clien.net/service/board/news', 'Clien News (Community)', 0, None)
+        )
+
     conn.commit()
     conn.close()
 
@@ -143,7 +153,7 @@ def update_article_summary(article_id, summary):
     conn.commit()
     conn.close()
 
-def get_recent_articles(hours=24):
+def get_recent_rss_articles(hours=24):
     conn = get_db_connection()
     cursor = conn.cursor()
     cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
@@ -152,10 +162,27 @@ def get_recent_articles(hours=24):
         SELECT a.*, f.name as feed_name 
         FROM articles a 
         JOIN feeds f ON a.feed_id = f.id 
-        WHERE a.published_at > ? 
+        WHERE a.published_at > ? AND a.feed_id != 'clien-community'
         ORDER BY a.published_at DESC
         ''',
         (cutoff,)
+    )
+    articles = cursor.fetchall()
+    conn.close()
+    return articles
+
+def get_clien_articles(limit=20):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Fetch recent Clien articles
+    cursor.execute(
+        '''
+        SELECT * FROM articles 
+        WHERE feed_id = 'clien-community' 
+        ORDER BY published_at DESC 
+        LIMIT ?
+        ''',
+        (limit,)
     )
     articles = cursor.fetchall()
     conn.close()
