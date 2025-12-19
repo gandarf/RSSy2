@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import google.generativeai as genai
@@ -15,122 +16,38 @@ if GEMINI_API_KEY:
 class GeminiSummarizer:
     def __init__(self):
         if not GEMINI_API_KEY:
-            print("WARNING: Gemini API Key not found in environment variables. AI features will be disabled.")
+            logger.warning("Gemini API Key not found in environment variables. AI features will be disabled.")
         self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         self.last_call_time = 0
-        self.min_interval = 10.0  # Increased to 10 seconds (approx 6 RPM) for extreme safety
+        self.min_interval = 10.0  # Total safeguard interval
         self.max_retries = 5
+        self.lock = asyncio.Lock()  # Atomic rate limit lock
 
-    def _clean_text(self, html_content):
-        if not html_content:
-            return ""
-        soup = BeautifulSoup(html_content, 'html.parser')
-        return soup.get_text(separator=' ', strip=True)[:4000]  # Limit context size
-
-    def _wait_for_rate_limit(self):
-        elapsed = time.time() - self.last_call_time
-        if elapsed < self.min_interval:
-            time.sleep(self.min_interval - elapsed)
-
-    def _call_with_retry(self, func, *args, **kwargs):
-        """Generic retry wrapper for API calls"""
-        for attempt in range(self.max_retries):
-            self._wait_for_rate_limit()
-            try:
-                result = func(*args, **kwargs)
-                self.last_call_time = time.time()
-                return result
-            except Exception as e:
-                # Check for 429 or quota errors
-                error_str = str(e)
-                if "429" in error_str or "quota" in error_str.lower():
-                    wait_time = (2 ** attempt) * 4  # Aggressive Backoff: 4, 8, 16, 32, 64 seconds
-                    print(f"Rate limit hit ({error_str}). Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                else:
-                    # Non-retriable error
-                    raise e
-        raise Exception("Max retries exceeded for Gemini API call")
-
-    def select_top_10(self, titles):
-        if not GEMINI_API_KEY:
-            return []
-        
-        # Prepare the list for the prompt
-        titles_text = "\n".join([f"{i}. {t}" for i, t in enumerate(titles)])
-        
-        prompt = f"""
-        Select the top 10 most important or interesting articles from the following list.
-        Please focus on economic, technical and social topics more. If there's no text to review, just ignore it.
-        Return ONLY the indices of the selected articles as a comma-separated list (e.g., 0, 2, 5, ...).
-        Do not include any other text.
-        
-        Articles:
-        {titles_text}
-        """
-
-        try:
-            logger.info(f"Gemini select_top_10 prompt:\n{prompt}")
-            # Wrap the generation call
-            response = self._call_with_retry(self.model.generate_content, prompt)
-            
-            # Parse response
-            text = response.text.strip()
-            # Handle potential non-numeric characters roughly
-            indices = [int(x.strip()) for x in text.split(',') if x.strip().isdigit()]
-            return indices[:10] # Enforce max 10
-            
-        except Exception as e:
-            print(f"Error selecting top 10: {e}")
-            return []
-
-    def summarize(self, content, max_length=None):
-        if not GEMINI_API_KEY:
-            return None # Return None on API key error to fallback
-
-        text = self._clean_text(content)
-        print(f"DEBUG_TEXT: {text}")
+    def _clean_text(self, text):
         if not text:
-            return None
-
-        length_instruction = "keep it concise."
-        if max_length:
-            length_instruction = f"summarize it up to {max_length} lines."
-
-        prompt = f"""
-        Analyze the following article content and synthesize a concise summary of the key points in Korean.
-        Do not just copy or translate sentences directly. Rewrite the main ideas in your own words.
-        Use a professional and objective tone.
-        Use Markdown formatting (bullet points, bolding) to make it easy to read.
-        {length_instruction}
-        
-        Article:
-        {text}
-        """
-        
-        try:
-            logger.info(f"Gemini summarize prompt:\n{prompt}")
-            response = self._call_with_retry(self.model.generate_content, prompt)
-            return response.text
-        except Exception as e:
-            print(f"Error summarizing: {e}")
-            return None # Return None on failure to trigger fallback
-            
-    def summarize_short(self, content):
-        return self.summarize(content, max_lines=10)
+            return ""
+        # If it's HTML, clean with BeautifulSoup, else just strip
+        if '<' in text and '>' in text:
+            soup = BeautifulSoup(text, 'html.parser')
+            return soup.get_text(separator=' ', strip=True)
+        return text.strip()
 
     async def _call_with_retry_async(self, func, *args, **kwargs):
-        """Generic async retry wrapper for API calls"""
-        import asyncio
+        """Generic async retry wrapper for API calls with atomic rate limiting"""
         for attempt in range(self.max_retries):
-            # Calculate wait time asynchronously
-            elapsed = time.time() - self.last_call_time
-            if elapsed < self.min_interval:
-                await asyncio.sleep(self.min_interval - elapsed)
+            # Atomic check and update of last_call_time
+            async with self.lock:
+                elapsed = time.time() - self.last_call_time
+                if elapsed < self.min_interval:
+                    wait_time = self.min_interval - elapsed
+                    logger.info(f"Rate limit throttle: waiting {wait_time:.1f}s")
+                    await asyncio.sleep(wait_time)
+                
+                # Update time BEFORE the call to reserve the slot
+                self.last_call_time = time.time()
 
             try:
                 result = await func(*args, **kwargs)
-                self.last_call_time = time.time()
                 return result
             except Exception as e:
                 error_str = str(e)
@@ -159,14 +76,8 @@ class GeminiSummarizer:
 
         try:
             logger.info(f"Gemini select_top_10_async prompt:\n{prompt}")
-            # Check if model has generate_content_async
-            if hasattr(self.model, 'generate_content_async'):
-                response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
-            else:
-                # Fallback to sync wrapped in thread if async not available (sanity check)
-                import asyncio
-                response = await asyncio.to_thread(self._call_with_retry, self.model.generate_content, prompt)
-
+            response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
+            
             text = response.text.strip()
             indices = [int(x.strip()) for x in text.split(',') if x.strip().isdigit()]
             return indices[:10]
@@ -203,11 +114,7 @@ class GeminiSummarizer:
         
         try:
              logger.info(f"Gemini select_clien_candidates_async prompt:\n{prompt}")
-             if hasattr(self.model, 'generate_content_async'):
-                response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
-             else:
-                import asyncio
-                response = await asyncio.to_thread(self._call_with_retry, self.model.generate_content, prompt)
+             response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
              
              text = response.text.strip()
              indices = [int(x.strip()) for x in text.split(',') if x.strip().isdigit()]
@@ -231,26 +138,42 @@ class GeminiSummarizer:
             length_instruction = f"summarize it up to {max_lines} lines."
 
         prompt = f"""
-        Analyze the following article content and synthesize a concise summary of the key points in Korean.
-        Do not just copy or translate sentences directly. Rewrite the main ideas in your own words.
-        Use a professional and objective tone.
-        Use Markdown formatting (bullet points, bolding) to make it easy to read.
-        {length_instruction}
+        Analyze the following content and synthesize a concise summary in Korean.
+        The content may include an article body and a [Comments] section representing user reactions.
         
-        Article:
+        Instructions:
+        1. Summarize the main points of the article clearly.
+        2. If comments are present, synthesize the overall sentiment or key points of discussion from the comments.
+        3. Do not just copy text. Rewrite in your own words with a professional and objective tone.
+        4. Use Markdown formatting (bullet points, bolding) for readability.
+        5. {length_instruction}
+        
+        Content:
         {text}
         """
         
         try:
-            logger.info(f"Gemini summarize_async prompt:\n{prompt}")
-            if hasattr(self.model, 'generate_content_async'):
-                response = await self._call_with_retry_async(self.model.generate_content_async, prompt)
-            else:
-                import asyncio
-                response = await asyncio.to_thread(self._call_with_retry, self.model.generate_content, prompt)
+            logger.info(f"Gemini summarize_async prompt length: {len(prompt)} chars")
+            # Set safety settings to blocks none to prevent 429/Empty response on free tier
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            
+            response = await self._call_with_retry_async(
+                self.model.generate_content_async, 
+                prompt,
+                safety_settings=safety_settings
+            )
+            
+            if not response.text:
+                logger.warning("Gemini returned empty text.")
+                return None
             return response.text
         except Exception as e:
-            print(f"Error summarizing (async): {e}")
+            logger.error(f"Error summarizing (async): {e}")
             return None
 
     async def summarize_short_async(self, content, max_lines=10):

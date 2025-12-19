@@ -3,6 +3,7 @@ from datetime import datetime
 import calendar
 from time import mktime
 from bs4 import BeautifulSoup
+import trafilatura
 
 def parse_date(entry):
     if hasattr(entry, 'published_parsed'):
@@ -128,24 +129,26 @@ async def fetch_article_body_async(url):
 
 def _extract_text_from_html(html):
     try:
+        # Use trafilatura for high-quality main content extraction
+        downloaded = trafilatura.extract(html, include_comments=False, include_tables=True, no_fallback=False)
+        
+        if downloaded:
+            return downloaded
+            
+        # Fallback to BeautifulSoup if trafilatura fails
         soup = BeautifulSoup(html, 'html.parser')
         
         # Remove script and style elements
         for script in soup(["script", "style", "nav", "footer", "header", "aside"]):
             script.decompose()
 
-        # Try to find the main article content
-        # Heuristics: look for <article>, or div with class 'content', 'article', etc.
-        # But for generic purposes, extracting all <p> tags is often a good baseline 
-        # combined with some density checking, but let's stick to simple <p> extraction for now as requested.
-        
         paragraphs = soup.find_all('p')
         text = ' '.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 20])
         
         if not text:
-            # Fallback: get body text if p tags are empty
             text = soup.get_text(separator=' ', strip=True)
             
         return text
-    except Exception:
+    except Exception as e:
+        print(f"Error extracting text: {e}")
         return ""

@@ -130,13 +130,39 @@ async def fetch_clien_article_full(url):
 def _extract_clien_content(html):
     soup = BeautifulSoup(html, 'html.parser')
     
-    # Extract content from .post_article or .article_view (common conventions)
-    # Clien specific: class="post_article"
-    
+    # 1. Extract main article content
     article = soup.find(class_='post_article')
     if not article:
         article = soup.find(class_='content') # Fallback
         
+    content_text = ""
     if article:
-        return article.get_text(separator=' ', strip=True)
+        content_text = article.get_text(separator=' ', strip=True)
+    
+    # 2. Extract comments from .comment_view
+    comments_section = soup.find(class_='comment_view')
+    comments_text = ""
+    if comments_section:
+        # Find all individual comment items
+        # Clien usually uses .comment_row or div with specific structure
+        # We can just get the whole text of the section if we want simple, 
+        # but let's try to be a bit cleaner.
+        comment_items = comments_section.find_all(class_='comment_row')
+        if not comment_items:
+            # Fallback: just get the whole section text if no rows found
+            comments_text = comments_section.get_text(separator=' ', strip=True)
+        else:
+            extracted_comments = []
+            for row in comment_items:
+                # Extract author and comment text
+                # Convention: .comment_content contains the text
+                comment_content = row.find(class_='comment_content')
+                if comment_content:
+                    extracted_comments.append(comment_content.get_text(separator=' ', strip=True))
+            
+            if extracted_comments:
+                comments_text = "\n[Comments]:\n" + "\n".join([f"- {c}" for c in extracted_comments[:20]]) # Limit to top 20 comments
+    
+    if content_text or comments_text:
+        return f"{content_text}\n\n{comments_text}".strip()
     return ""
