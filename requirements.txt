@@ -8,4 +8,5 @@ jinja2
 beautifulsoup4
 requests
 aiohttp
+python-multipart
 trafilatura
