@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from database import init_db, add_feed, get_feeds, delete_feed, get_recent_rss_articles, get_last_updated, get_setting, set_setting, get_job_status, get_clien_articles
-from scheduler import start_scheduler, update_feeds_job, update_job_settings
+from scheduler import start_scheduler, update_feeds_job, update_rss_job, update_clien_job_standalone, update_job_settings
 from logger_config import logger
 from dotenv import load_dotenv
 import uvicorn
@@ -16,9 +16,12 @@ ADMIN_PIN = os.getenv("ADMIN_PIN", "1234") # Default fallback
 
 app = FastAPI(title="RSSy2")
 
-# Create templates directory if it doesn't exist
-if not os.path.exists("templates"):
-    os.makedirs("templates")
+# Create templates and static directory if they don't exist
+for folder in ["templates", "static"]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
@@ -101,8 +104,25 @@ async def remove_feed(request: Request, feed_id: str = Form(...)):
     delete_feed(feed_id)
     return RedirectResponse(url="/", status_code=303)
 
+@app.post("/refresh/rss")
+async def refresh_rss(request: Request, background_tasks: BackgroundTasks):
+    if not is_authenticated(request):
+         raise HTTPException(status_code=401, detail="Unauthorized")
+    background_tasks.add_task(update_rss_job)
+    return RedirectResponse(url="/", status_code=303)
+
+@app.post("/refresh/clien")
+async def refresh_clien(request: Request, background_tasks: BackgroundTasks):
+    if not is_authenticated(request):
+         raise HTTPException(status_code=401, detail="Unauthorized")
+    background_tasks.add_task(update_clien_job_standalone)
+    return RedirectResponse(url="/", status_code=303)
+
 @app.post("/refresh")
-async def refresh_feeds(background_tasks: BackgroundTasks):
+async def refresh_feeds(request: Request, background_tasks: BackgroundTasks):
+    # Keep legacy /refresh but protect it
+    if not is_authenticated(request):
+         raise HTTPException(status_code=401, detail="Unauthorized")
     # Trigger update in background
     background_tasks.add_task(update_feeds_job)
     # Return immediately to let UI poll for status

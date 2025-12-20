@@ -55,13 +55,13 @@ async def process_article(feed_id, entry, is_top_candidate, semaphore):
     )
     return 1 # Processed count
 
-async def update_feeds_job():
-    logger.info("Starting async feed update job...")
-    update_job_status(JOB_ID, "fetching", "Starting update...", 0, 0)
+async def update_rss_job():
+    logger.info("Starting async RSS feed update job...")
+    update_job_status(JOB_ID, "fetching", "Starting RSS update...", 0, 0)
     
-    # 1. Clear DB
-    logger.info("Clearing existing articles...")
-    clear_articles()
+    # 1. Clear RSS articles
+    logger.info("Clearing existing RSS articles...")
+    clear_articles('rss')
     
     # 2. Fetch Feeds
     feeds = get_feeds(active_only=True)
@@ -139,18 +139,23 @@ async def update_feeds_job():
     await asyncio.gather(*process_tasks)
     
     # 5. Cleanup
-    # 5. Cleanup
     cleanup_old_articles(days=7)
     
-    # 6. Trigger Clien Update (Sequential for now to share resources/status)
-    await update_clien_job()
+    update_job_status(JOB_ID, "completed", "RSS update completed.", len(all_new_entries), len(all_new_entries))
+    logger.info("RSS feed update job completed.")
+
+async def update_feeds_job():
+    """Combined job for scheduled tasks"""
+    await update_rss_job()
+    await update_clien_job_standalone()
     
-    update_job_status(JOB_ID, "completed", "Update completed.", len(all_new_entries), len(all_new_entries))
-    logger.info("Feed update job completed.")
-    
-async def update_clien_job():
+async def update_clien_job_standalone():
     logger.info("Starting Clien update...")
     update_job_status(JOB_ID, "processing", "Fetching Clien News...", 0, 0)
+    
+    # Clear existing Clien articles for a fresh start
+    logger.info("Clearing existing Clien articles...")
+    clear_articles('clien')
     
     # 1. Fetch List
     candidates = await fetch_clien_list()
@@ -171,23 +176,25 @@ async def update_clien_job():
     
     async def process_clien_item(idx, item):
         async with semaphore:
-            full_content = await fetch_clien_article_full(item['link'])
-            context = full_content if full_content else item['title']
+            full_data = await fetch_clien_article_full(item['link'])
+            body = full_data.get('body', '')
+            comments = full_data.get('comments', [])
             
-            summary = await summarizer.summarize_short_async(context)
-            if not summary:
-                 summary = "Summary failed."
+            article_sum, comment_sum = await summarizer.summarize_clien_with_comments_async(body, comments)
+            if not article_sum:
+                 article_sum = "Summary failed."
 
-            # Save to DB with special feed ID
-            # We assume save_article handles ID generation
+            # Save to DB with separate summaries
             save_article(
                 CLIEN_FEED_ID,
                 item['title'],
                 item['link'],
                 datetime.utcnow().isoformat(), # Now
-                full_content, # Raw content
-                summary=summary,
-                is_top_selection=True # All selected are "top" for this feed
+                body, # Raw content
+                summary=article_sum,
+                is_top_selection=True, # All selected are "top" for this feed
+                comment_summary=comment_sum,
+                comment_count=item.get('comment_count', 0)
             )
 
     tasks = []
@@ -196,6 +203,9 @@ async def update_clien_job():
             tasks.append(process_clien_item(i, candidates[i]))
             
     await asyncio.gather(*tasks)
+    cleanup_old_articles(days=7)
+    
+    update_job_status(JOB_ID, "completed", "Clien update finished.", len(selected_indices), len(selected_indices))
     logger.info("Clien update finished.")
 
 def start_scheduler():

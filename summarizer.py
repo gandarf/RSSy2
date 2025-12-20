@@ -17,7 +17,7 @@ class GeminiSummarizer:
     def __init__(self):
         if not GEMINI_API_KEY:
             logger.warning("Gemini API Key not found in environment variables. AI features will be disabled.")
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
         self.last_call_time = 0
         self.min_interval = 10.0  # Total safeguard interval
         self.max_retries = 5
@@ -124,12 +124,100 @@ class GeminiSummarizer:
             # Fallback
             return sorted(range(len(candidates)), key=lambda k: candidates[k]['comment_count'], reverse=True)[:10]
 
+    async def summarize_clien_with_comments_async(self, body, comments, max_lines=10):
+        if not GEMINI_API_KEY:
+            return None, None
+
+        body_text = self._clean_text(body)
+        
+        if not comments:
+            logger.info("No comments found for this article. Skipping comment summary to avoid hallucination.")
+            prompt = f"""
+            Analyze the following Clien community content and provide a summary in Korean.
+            
+            1. [ARTICLE SUMMARY]: A concise summary of the main news/article body.
+            2. [COMMENT SUMMARY]: Return "댓글이 없습니다."
+            
+            Instructions:
+            - Be objective and professional.
+            - Use Markdown (bullet points, bolding).
+            - Keep the article summary up to {max_lines} lines.
+            - Format your response EXACTLY as follows:
+            ---ARTICLE---
+            (Article summary here)
+            ---COMMENTS---
+            댓글이 없습니다.
+            
+            Article Body:
+            {body_text}
+            """
+        else:
+            comments_text = "\n".join([f"- {c}" for c in comments])
+            prompt = f"""
+            Analyze the following Clien community content and provide two distinct summaries in Korean.
+            
+            1. [ARTICLE SUMMARY]: A concise summary of the main news/article body.
+            2. [COMMENT SUMMARY]: A synthesis of the community's reaction, sentiment, and key discussion points from the comments.
+            
+            Instructions:
+            - Be objective and professional.
+            - Use Markdown (bullet points, bolding).
+            - Keep the article summary up to {max_lines} lines.
+            - Keep the comment summary concise but insightful.
+            - Format your response EXACTLY as follows:
+            ---ARTICLE---
+            (Article summary here)
+            ---COMMENTS---
+            (Comment summary here)
+            
+            Article Body:
+            {body_text}
+            
+            Comments:
+            {comments_text}
+            """
+        
+        try:
+            logger.info(f"Gemini summarize_clien_with_comments_async prompt length: {len(prompt)} chars")
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            
+            response = await self._call_with_retry_async(
+                self.model.generate_content_async, 
+                prompt,
+                safety_settings=safety_settings
+            )
+            
+            full_text = response.text
+            if not full_text:
+                return None, None
+            
+            article_sum = ""
+            comment_sum = ""
+            
+            if "---ARTICLE---" in full_text and "---COMMENTS---" in full_text:
+                parts = full_text.split("---COMMENTS---")
+                comment_sum = parts[1].strip()
+                article_sum = parts[0].replace("---ARTICLE---", "").strip()
+            else:
+                # Fallback if AI doesn't follow format exactly
+                article_sum = full_text
+            
+            return article_sum, comment_sum
+            
+        except Exception as e:
+            logger.error(f"Error in summarize_clien_with_comments_async: {e}")
+            return None, None
+
     async def summarize_async(self, content, max_lines=None):
         if not GEMINI_API_KEY:
             return None 
 
         text = self._clean_text(content)
-        print(f"DEBUG_TEXT: {text}")
         if not text:
             return None
 
@@ -139,14 +227,12 @@ class GeminiSummarizer:
 
         prompt = f"""
         Analyze the following content and synthesize a concise summary in Korean.
-        The content may include an article body and a [Comments] section representing user reactions.
         
         Instructions:
-        1. Summarize the main points of the article clearly.
-        2. If comments are present, synthesize the overall sentiment or key points of discussion from the comments.
-        3. Do not just copy text. Rewrite in your own words with a professional and objective tone.
-        4. Use Markdown formatting (bullet points, bolding) for readability.
-        5. {length_instruction}
+        1. Summarize the main points clearly.
+        2. Do not just copy text. Rewrite in your own words with a professional and objective tone.
+        3. Use Markdown formatting (bullet points, bolding) for readability.
+        4. {length_instruction}
         
         Content:
         {text}
@@ -154,7 +240,6 @@ class GeminiSummarizer:
         
         try:
             logger.info(f"Gemini summarize_async prompt length: {len(prompt)} chars")
-            # Set safety settings to blocks none to prevent 429/Empty response on free tier
             safety_settings = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},

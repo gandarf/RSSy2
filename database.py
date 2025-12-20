@@ -39,9 +39,18 @@ def init_db():
         summarized_at DATETIME,
         image_url TEXT,
         is_top_selection BOOLEAN DEFAULT 0,
+        comment_summary TEXT,
+        comment_count INTEGER DEFAULT 0,
         FOREIGN KEY(feed_id) REFERENCES feeds(id)
     )
     ''')
+    
+    # Simple migration: check if comment_count exists
+    try:
+        cursor.execute("SELECT comment_count FROM articles LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("Migrating database: adding comment_count to articles table")
+        cursor.execute("ALTER TABLE articles ADD COLUMN comment_count INTEGER DEFAULT 0")
     
 
 
@@ -118,7 +127,7 @@ def filter_new_urls(urls):
     conn.close()
     return [url for url in urls if url not in existing_urls]
 
-def save_article(feed_id, title, url, published_at, content, image_url=None, summary=None, is_top_selection=False):
+def save_article(feed_id, title, url, published_at, content, image_url=None, summary=None, is_top_selection=False, comment_summary=None, comment_count=0):
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -134,10 +143,10 @@ def save_article(feed_id, title, url, published_at, content, image_url=None, sum
     
     cursor.execute(
         '''
-        INSERT INTO articles (id, feed_id, title, original_url, published_at, raw_content, image_url, summary, summarized_at, is_top_selection)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO articles (id, feed_id, title, original_url, published_at, raw_content, image_url, summary, summarized_at, is_top_selection, comment_summary, comment_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
-        (article_id, feed_id, title, url, published_at, content, image_url, summary, summarized_at, is_top_selection)
+        (article_id, feed_id, title, url, published_at, content, image_url, summary, summarized_at, is_top_selection, comment_summary, comment_count)
     )
     conn.commit()
     conn.close()
@@ -196,10 +205,15 @@ def cleanup_old_articles(days=7):
     conn.commit()
     conn.close()
 
-def clear_articles():
+def clear_articles(feed_type='all'):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM articles")
+    if feed_type == 'rss':
+        cursor.execute("DELETE FROM articles WHERE feed_id != 'clien-community'")
+    elif feed_type == 'clien':
+        cursor.execute("DELETE FROM articles WHERE feed_id = 'clien-community'")
+    else:
+        cursor.execute("DELETE FROM articles")
     conn.commit()
     conn.close()
 
