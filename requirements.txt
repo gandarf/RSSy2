@@ -10,3 +10,4 @@ requests
 aiohttp
 python-multipart
 trafilatura
+lxml_html_clean
