@@ -98,6 +98,12 @@ class GeminiSummarizer:
         # Format for prompt
         # "Index. [Comments: N] Title"
         items_text = "\n".join([f"{i}. [Comments: {c['comment_count']}] {c['title']}" for i, c in enumerate(candidates)])
+
+        lines = items_text.splitlines()
+        if len(lines) >= 3:
+            remaining_lines = lines[3:]
+        
+        items_text = "\n".join(remaining_lines)
         
         prompt = f"""
         Select the Top 10 articles from the following list from a tech community.
@@ -105,9 +111,10 @@ class GeminiSummarizer:
         1. High comment count.
         2. Relevance to keywords: Google, Apple, Samsung Electronics, Galaxy, TV.
         
-        Prioritize articles that match the keywords AND have high engagement.
+        Prioritize articles that match the keywords and have high engagement as much as possible.
         Return ONLY the indices of the selected articles as a comma-separated list excluding index 0,1,2.
         Do not include any notice articles such as "새소식 게시판 이용권한 변경 안내, 새로운소식 게시판 이용규칙, 사이트 이용규칙 (종합)".
+        Try to fill out 10 articles as much as possible without notice articles.
         
         Articles:
         {items_text}
