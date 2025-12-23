@@ -153,6 +153,7 @@ class GeminiSummarizer:
             """
         else:
             comments_text = "\n".join([f"- {c}" for c in comments])
+            logger.info(f"DEBUG: comments_text for summarization:\n{comments_text}")
             prompt = f"""
             Analyze the following Clien community content and provide two distinct summaries in Korean.
             
