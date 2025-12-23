@@ -106,7 +106,8 @@ class GeminiSummarizer:
         2. Relevance to keywords: Google, Apple, Samsung Electronics, Galaxy, TV.
         
         Prioritize articles that match the keywords AND have high engagement.
-        Return ONLY the indices of the selected articles as a comma-separated list excluding 0,1,2.
+        Return ONLY the indices of the selected articles as a comma-separated list excluding index 0,1,2.
+        Do not include any notice articles such as "새소식 게시판 이용권한 변경 안내, 새로운소식 게시판 이용규칙, 사이트 이용규칙 (종합)".
         
         Articles:
         {items_text}
