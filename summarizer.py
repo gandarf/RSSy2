@@ -102,11 +102,11 @@ class GeminiSummarizer:
         prompt = f"""
         Select the Top 10 articles from the following list from a tech community.
         Criteria:
-        1. High comment count (indicates popularity/controversy).
+        1. High comment count.
         2. Relevance to keywords: Google, Apple, Samsung Electronics, Galaxy, TV.
         
         Prioritize articles that match the keywords AND have high engagement.
-        Return ONLY the indices of the selected articles as a comma-separated list.
+        Return ONLY the indices of the selected articles as a comma-separated list excluding 0,1,2.
         
         Articles:
         {items_text}
