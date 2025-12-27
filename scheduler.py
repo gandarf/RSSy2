@@ -5,7 +5,7 @@ from clien_fetcher import fetch_clien_list, fetch_clien_article_full
 from summarizer import GeminiSummarizer
 from logger_config import logger
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Use AsyncIOScheduler
 scheduler = AsyncIOScheduler()
@@ -146,6 +146,15 @@ async def update_rss_job():
 
 async def update_feeds_job():
     """Combined job for scheduled tasks"""
+    # Check KST time (UTC+9)
+    # Sleep time: 23:00 - 06:00
+    utc_now = datetime.utcnow()
+    kst_now = utc_now + timedelta(hours=9)
+    
+    if kst_now.hour >= 23 or kst_now.hour < 6:
+        logger.info(f"Sleep time ({kst_now.strftime('%H:%M')} KST). Skipping scheduled update.")
+        return
+
     await update_rss_job()
     await update_clien_job_standalone()
     

@@ -66,7 +66,7 @@ class GeminiSummarizer:
         titles_text = "\n".join([f"{i}. {t}" for i, t in enumerate(titles)])
         prompt = f"""
         Select the top 10 most important or interesting articles from the following list.
-        Please focus on economic and technical topics more. If there's no text to review, just ignore it.
+        Please focus on economic and technical topics more. If there's no text or too short to review, just ignore it.
         Return ONLY the indices of the selected articles as a comma-separated list (e.g., 0, 2, 5, ...).
         Do not include any other text.
         
@@ -98,15 +98,23 @@ class GeminiSummarizer:
         # Format for prompt
         # "Index. [Comments: N] Title"
         items_text = "\n".join([f"{i}. [Comments: {c['comment_count']}] {c['title']}" for i, c in enumerate(candidates)])
+
+        lines = items_text.splitlines()
+        if len(lines) >= 3:
+            remaining_lines = lines[3:]
+        
+        items_text = "\n".join(remaining_lines)
         
         prompt = f"""
         Select the Top 10 articles from the following list from a tech community.
         Criteria:
-        1. High comment count (indicates popularity/controversy).
+        1. High comment count.
         2. Relevance to keywords: Google, Apple, Samsung Electronics, Galaxy, TV.
         
-        Prioritize articles that match the keywords AND have high engagement.
-        Return ONLY the indices of the selected articles as a comma-separated list.
+        Prioritize articles that match the keywords and have high engagement as much as possible.
+        Return ONLY the indices of the selected articles as a comma-separated list excluding index 0,1,2.
+        Do not include any notice articles such as "새소식 게시판 이용권한 변경 안내, 새로운소식 게시판 이용규칙, 사이트 이용규칙 (종합)".
+        Try to fill out 10 articles as much as possible without notice articles.
         
         Articles:
         {items_text}
@@ -131,28 +139,13 @@ class GeminiSummarizer:
         body_text = self._clean_text(body)
         
         if not comments:
-            logger.info("No comments found for this article. Skipping comment summary to avoid hallucination.")
-            prompt = f"""
-            Analyze the following Clien community content and provide a summary in Korean.
-            
-            1. [ARTICLE SUMMARY]: A concise summary of the main news/article body.
-            2. [COMMENT SUMMARY]: Return "댓글이 없습니다."
-            
-            Instructions:
-            - Be objective and professional.
-            - Use Markdown (bullet points, bolding).
-            - Keep the article summary up to {max_lines} lines.
-            - Format your response EXACTLY as follows:
-            ---ARTICLE---
-            (Article summary here)
-            ---COMMENTS---
-            댓글이 없습니다.
-            
-            Article Body:
-            {body_text}
-            """
+            logger.info("No comments found. Summarizing article only.")
+            article_sum = await self.summarize_async(body, max_lines=max_lines)
+            return article_sum, ""
+
         else:
             comments_text = "\n".join([f"- {c}" for c in comments])
+            logger.info(f"DEBUG: comments_text for summarization:\n{comments_text}")
             prompt = f"""
             Analyze the following Clien community content and provide two distinct summaries in Korean.
             

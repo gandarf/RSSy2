@@ -247,11 +247,14 @@
         }
 
         .article-image {
-            width: 120px;
-            height: 120px;
+            width: 100%;
+            max-height: 150px;
+            height: auto;
             object-fit: cover;
             border-radius: 0.375rem;
             flex-shrink: 0;
+            margin-bottom: 1rem;
+            display: block;
         }
 
         form {
@@ -359,11 +362,6 @@
                 grid-template-columns: 1fr;
             }
 
-            .article-image {
-                width: 80px;
-                height: 80px;
-            }
-
             .standard-grid {
                 grid-template-columns: 1fr;
             }
@@ -423,14 +421,13 @@
                                 <h2 class="article-title">
                                     <a href="{{ article.original_url }}" target="_blank">{{ article.title }}</a>
                                 </h2>
+                                {% if article.image_url %}
+                                <img src="{{ article.image_url }}" alt="Article Image" class="article-image" onerror="this.style.display='none'">
+                                {% endif %}
                                 <div class="article-summary markdown-body" data-markdown="{{ article.summary }}">
                                     <!-- Markdown rendered here -->
                                 </div>
-                            </div>
-                            {% if article.image_url %}
-                            <img src="{{ article.image_url }}" alt="Article Image" class="article-image"
-                                onerror="this.style.display='none'">
-                            {% endif %}
+                                </div>
                         </article>
                         {% endfor %}
                     </div>

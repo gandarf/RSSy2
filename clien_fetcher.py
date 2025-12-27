@@ -139,23 +139,66 @@ def _extract_clien_content(html):
     if article:
         content_text = article.get_text(separator=' ', strip=True)
     
-    # 2. Extract comments from .comment_view
-    comments_section = soup.find(class_='comment_view')
+    # 2. Extract comments
     extracted_comments = []
-    if comments_section:
-        comment_items = comments_section.find_all(class_='comment_row')
-        if not comment_items:
-            # Fallback: just get the whole section text if no rows found
-            text = comments_section.get_text(separator=' ', strip=True)
-            if text:
-                extracted_comments.append(text)
-        else:
-            for row in comment_items:
-                comment_content = row.find(class_='comment_content')
-                if comment_content:
-                    extracted_comments.append(comment_content.get_text(separator=' ', strip=True))
+    
+    # Priority 1: Look for explicit comment rows (classic desktop/mobile web)
+    # Search globally or within a large container to avoid missing them if layout changes
+    comment_items = soup.find_all(class_='comment_row')
+    
+    # If not found by class, try data-role
+    if not comment_items:
+        comment_items = soup.find_all(attrs={'data-role': 'comment-row'})
+
+    if comment_items:
+        for item in comment_items:
+            # Determine if it's a re-comment (nested)
+            is_reply = False
+            classes = item.get('class', [])
+            if 're_comment' in classes:
+                is_reply = True
+            
+            # Identify content
+            content_div = item.find(class_='comment_content')
+            if not content_div:
+                content_div = item.find(class_='comment_msg')
+            
+            if content_div:
+                text = content_div.get_text(separator=' ', strip=True)
+                if text:
+                    # Optional: Add indicator for replies if needed, e.g. "↳ "
+                    # But user just wants to read them.
+                    extracted_comments.append(text)
+    
+    # Priority 2: Fallback to existing logic if no rows found
+    if not extracted_comments:
+        comments_section = soup.find(class_='comment_view')
+        if not comments_section:
+            comments_section = soup.find(class_='post_comment')
+            
+        if comments_section:
+            # Look for comment_msg or just text
+            msgs = comments_section.find_all(class_='comment_msg')
+            if msgs:
+                for msg in msgs:
+                    text = msg.get_text(separator=' ', strip=True)
+                    if text:
+                        extracted_comments.append(text)
+            else:
+                # Last resort: text of section
+                # But this might include UI text. Be careful.
+                # Only do this if it looks like a simple text container
+                if comments_section.name in ['div', 'span', 'p']:
+                     text = comments_section.get_text(separator=' ', strip=True)
+                     if text and len(text) > 1: # filtering empty
+                         extracted_comments.append(text)
+
+    return {
+        'body': content_text,
+        'comments': extracted_comments[:50]  # Limit to top 50 comments
+    }
     
     return {
         'body': content_text,
-        'comments': extracted_comments[:20]  # Limit to top 20 comments
+        'comments': extracted_comments[:50]  # Limit to top 50 comments
     }
