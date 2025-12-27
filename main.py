@@ -150,4 +150,4 @@ async def update_settings(request: Request, auto_refresh: str = Form(None), refr
     return RedirectResponse(url="/", status_code=303)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
