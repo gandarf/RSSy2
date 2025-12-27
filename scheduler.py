@@ -181,15 +181,25 @@ async def update_clien_job_standalone():
     # 3. Process Top 10
     update_job_status(JOB_ID, "summarizing", "Summarizing Clien articles...", len(selected_indices), 0)
     
-    semaphore = asyncio.Semaphore(2) # Conservative limit
+    semaphore = asyncio.Semaphore(10) # Conservative limit
     
     async def process_clien_item(idx, item):
         async with semaphore:
             full_data = await fetch_clien_article_full(item['link'])
             body = full_data.get('body', '')
             comments = full_data.get('comments', [])
-            
-            article_sum, comment_sum = await summarizer.summarize_clien_with_comments_async(body, comments)
+            logger.info(f"[process_clien_item] body = ", body)
+            logger.info(f"[process_clien_item] comments = ", comments)
+
+            # Check comment count from list item to decide strategy
+            comment_count_list = item.get('comment_count', 0)
+            logger.info(f"Processing item '{item['title']}' with comment_count={comment_count_list}")
+
+            if comment_count_list > 0:
+                 article_sum, comment_sum = await summarizer.summarize_clien_with_comments_async(body, comments)
+            else:
+                 article_sum, comment_sum = await summarizer.summarize_clien_article_only_async(body)
+
             if not article_sum:
                  article_sum = "Summary failed."
 

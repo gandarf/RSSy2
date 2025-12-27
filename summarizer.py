@@ -137,41 +137,35 @@ class GeminiSummarizer:
             return None, None
 
         body_text = self._clean_text(body)
+        comments_text = "\n".join([f"- {c}" for c in comments])
         
-        if not comments:
-            logger.info("No comments found. Summarizing article only.")
-            article_sum = await self.summarize_async(body, max_lines=max_lines)
-            return article_sum, ""
+        logger.info(f"Summarizing with comments. Body len: {len(body_text)}, Comments: {len(comments)}")
 
-        else:
-            comments_text = "\n".join([f"- {c}" for c in comments])
-            logger.info(f"DEBUG: comments_text for summarization:\n{comments_text}")
-            prompt = f"""
-            Analyze the following Clien community content and provide two distinct summaries in Korean.
-            
-            1. [ARTICLE SUMMARY]: A concise summary of the main news/article body.
-            2. [COMMENT SUMMARY]: A synthesis of the community's reaction, sentiment, and key discussion points from the comments.
-            
-            Instructions:
-            - Be objective and professional.
-            - Use Markdown (bullet points, bolding).
-            - Keep the article summary up to {max_lines} lines.
-            - Keep the comment summary concise but insightful.
-            - Format your response EXACTLY as follows:
-            ---ARTICLE---
-            (Article summary here)
-            ---COMMENTS---
-            (Comment summary here)
-            
-            Article Body:
-            {body_text}
-            
-            Comments:
-            {comments_text}
-            """
+        prompt = f"""
+        Analyze the following Clien community content and provide two distinct summaries in Korean.
+        
+        1. [ARTICLE SUMMARY]: A concise summary of the main news/article body.
+        2. [COMMENT SUMMARY]: A synthesis of the community's reaction, sentiment, and key discussion points from the comments.
+        
+        Instructions:
+        - Be objective and professional.
+        - Use Markdown (bullet points, bolding).
+        - Keep the article summary up to {max_lines} lines.
+        - Keep the comment summary concise but insightful.
+        - Format your response EXACTLY as follows:
+        ---ARTICLE---
+        (Article summary here)
+        ---COMMENTS---
+        (Comment summary here)
+        
+        Article Body:
+        {body_text}
+        
+        Comments:
+        {comments_text}
+        """
         
         try:
-            logger.info(f"Gemini summarize_clien_with_comments_async prompt length: {len(prompt)} chars")
             safety_settings = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -205,6 +199,14 @@ class GeminiSummarizer:
         except Exception as e:
             logger.error(f"Error in summarize_clien_with_comments_async: {e}")
             return None, None
+
+    async def summarize_clien_article_only_async(self, body, max_lines=10):
+        if not GEMINI_API_KEY:
+            return None, ""
+
+        logger.info("Summarizing article only (no comments).")
+        article_sum = await self.summarize_async(body, max_lines=max_lines)
+        return article_sum, ""
 
     async def summarize_async(self, content, max_lines=None):
         if not GEMINI_API_KEY:
