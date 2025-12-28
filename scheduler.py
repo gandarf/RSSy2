@@ -166,6 +166,9 @@ async def update_clien_job_standalone():
     logger.info("Clearing existing Clien articles...")
     clear_articles('clien')
     
+    # Update last fetched timestamp
+    update_feed_last_fetched(CLIEN_FEED_ID)
+    
     # 1. Fetch List
     candidates = await fetch_clien_list()
     if not candidates:

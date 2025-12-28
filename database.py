@@ -230,7 +230,7 @@ def update_feed_last_fetched(feed_id):
 def get_last_updated():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT MAX(last_fetched_at) as last_updated FROM feeds WHERE is_active = 1")
+    cursor.execute("SELECT MAX(last_fetched_at) as last_updated FROM feeds WHERE is_active = 1 OR id = 'clien-community'")
     result = cursor.fetchone()
     conn.close()
     if result and result['last_updated']:
