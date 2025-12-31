@@ -27,3 +27,6 @@ key.env
 
 # VSCode
 .vscode/
+
+# Cookies
+cookies.txt
