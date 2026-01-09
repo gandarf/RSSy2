@@ -17,7 +17,7 @@ class GeminiSummarizer:
     def __init__(self):
         if not GEMINI_API_KEY:
             logger.warning("Gemini API Key not found in environment variables. AI features will be disabled.")
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         self.last_call_time = 0
         self.min_interval = 10.0  # Total safeguard interval
         self.max_retries = 5
